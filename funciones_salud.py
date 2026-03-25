@@ -942,14 +942,100 @@ async def lector_docs(model_vision, processor_vision):
 
 
 # =====================================================================
-# 12. OPCIÓN 6: MENÚ DE AJUSTES
+# 12. OPCIÓN 6: MENÚ DE AJUSTES + FUNCIONES DE CAMBIO DE NOMBRE Y BORRADO DE HISTORIAL
 # =====================================================================
 import re
 import torch
+import json
+import asyncio
+
+async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
+    texto_bienvenida = "¿Por qué nombre quieres que te llame?"
+    print(texto_bienvenida)
+    await generar_voz(texto_bienvenida)
+
+    # Pausa para que termine de hablar antes de grabar
+    await asyncio.sleep(3)
+
+    # Grabamos al usuario
+    archivo_wav = grabar_audio(segundos=5)
+
+    # 1. Transcribimos el audio con Whisper (usando el parámetro)
+    resultado = model_whisper.transcribe(archivo_wav, language="es")
+    texto_bruto = resultado["text"].strip()
+    print(f"Has dicho: '{texto_bruto}'")
+
+    # 2. PROCESAMOS EL NOMBRE CON QWEN (usando los parámetros)
+    print("Procesando tu nombre...")
+
+    # Preparamos el prompt estricto para extraer solo el nombre
+    mensajes = [
+        {"role": "system", "content": "Eres un asistente experto en extracción de entidades. Tu única tarea es leer una frase y devolver ÚNICAMENTE el nombre propio de la persona que se presenta. No añadas puntos, ni saludos, ni explicaciones. Solo la palabra del nombre."},
+        {"role": "user", "content": f"Extrae el nombre de esta frase: '{texto_bruto}'"}
+    ]
+
+    # Tokenizamos y mandamos al modelo
+    texto_prompt = tokenizer_texto.apply_chat_template(mensajes, tokenize=False, add_generation_prompt=True)
+    inputs = tokenizer_texto([texto_prompt], return_tensors="pt").to(model_texto.device)
+
+    # Generamos la respuesta con temperature baja para mayor precisión
+    outputs = model_texto.generate(**inputs, max_new_tokens=10, temperature=0.1)
+    nombre_limpio = tokenizer_texto.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
+
+    print(f"Nombre extraído: '{nombre_limpio}'")
+    # ========================================================
+
+    # Guardamos el nombre limpio en memoria
+    memoria["nombre"] = nombre_limpio
+    guardar_memoria(memoria)
+
+    texto_confirmacion = f"¡Perfecto, {memoria['nombre']}! Ya he cambiado tu nombre."
+    print(f"¡Perfecto, {memoria['nombre']}! Ya he cambiado tu nombre. 🤗")
+    await generar_voz(texto_confirmacion)
+
+    # RETORNAMOS LA MEMORIA ACTUALIZADA
+    return memoria
+
+
+async def borrar_historial(memoria, model_whisper):
+    texto = """
+    ¿Seguro que quieres eliminar tu historial?
+    Si sigues adelante borraré todo tu registro de medicamento y esta acción es irreversible.
+    ¿Quieres seguir adelante?
+    """
+    print(texto)
+    await generar_voz(texto)
+    await asyncio.sleep(12)
+
+    archivo_audio = grabar_audio(segundos=5)
+    
+    # Transcribimos con Whisper (usando el parámetro)
+    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    confirmacion = resultado["text"].lower()
+
+    if any(p in confirmacion for p in ["sí", "si", "vale", "correcto"]):
+        # Mantenemos el nombre pero borramos el resto
+        perfil_vacio = {"nombre": memoria['nombre'], "medicinas": [], "ultimas_adiciones": []}
+        with open("memoria_salud.json", "w") as f:
+            json.dump(perfil_vacio, f, indent=4)
+            
+        memoria = perfil_vacio
+        print("Historial borrado correctamente.")
+        await generar_voz("He borrado todo tu historial correctamente.")
+        await asyncio.sleep(5)
+        return memoria
+
+    else:
+        print("No se ha realizado ningún cambio.")
+        await generar_voz("No se ha realizado ningún cambio.")
+        await asyncio.sleep(3)
+
+    return memoria
+
 
 async def menu_ajustes(model_whisper, model_texto, tokenizer_texto):
     print("\n" + " · "*10)
-    print("        AJUSTES 🔧")
+    print("           AJUSTES 🔧")
     print(" · "*10)
     # Texto para pantalla y para la voz
     menu_texto = (
@@ -1001,6 +1087,7 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto):
             temperature=None,
             top_p=None,
             top_k=None
+
         )
 
     # Extraer número
@@ -1019,11 +1106,12 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto):
         opcion = int(match_num.group(1))
         return opcion
     else:
+        # Si no detecta ninguna opción válida, avisa y reinicia
         error_msg = "No he logrado entender qué opción quieres. Vamos a intentarlo de nuevo."
         print(f"⚠️ {error_msg}")
         await generar_voz(error_msg)
         await asyncio.sleep(5)
-        return await menu_ajustes(model_whisper, model_texto, tokenizer_texto) 
+        return await menu_ajustes(model_whisper, model_texto, tokenizer_texto) # Llamada recursiva con los parámetros
 
 
 
