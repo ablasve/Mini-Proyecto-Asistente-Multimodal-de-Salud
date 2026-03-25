@@ -1211,3 +1211,74 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto):
         await generar_voz(error_msg)
         await asyncio.sleep(5)
         return await mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto) # Llamada recursiva con los parámetros
+    
+
+# =====================================================================
+# 14. BUCLE PRINCIPAL DEL ASISTENTE
+# =====================================================================
+async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_vision, processor_vision):
+    print(" · "*16)
+    print("   🚀 INICIANDO SISTEMA MULTIMODAL DE SALUD...")
+    print(" · "*16)
+
+    # 1. Cargar la memoria base desde el archivo JSON
+    memoria = cargar_memoria()
+
+    # 2. Presentación (Aquí actualizamos la memoria con el nombre si es nuevo)
+    memoria = await presentacion(memoria, model_whisper, model_texto, tokenizer_texto)
+    await asyncio.sleep(3)
+
+    # 3. Bucle del asistente, que acabará cuando el usuario decida
+    while True:
+        # Llamamos al menú por voz (solo nos devuelve el número del 1 al 7)
+        opcion = await mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto)
+
+        # ==========================================
+        # 4. RUTA HACIA LA FASE B (FUNCIONALIDADES)
+        # ==========================================
+        if opcion == 1:
+            print("\n💊 [Opción 1] - Registrar medicamentos mediante imágenes")
+            memoria = await subir_receta(memoria, model_vision, processor_vision)
+            await asyncio.sleep(2)
+
+        elif opcion == 2:
+            print("\n✏️ [Opción 2] - Modificar o eliminar medicamentos")
+            memoria = await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto)
+            await asyncio.sleep(2)
+
+        elif opcion == 3:
+            print("\n📋 [Opción 3] - Ver Tabla Resumen de los tratamientos")
+            resumen_visual(memoria) # Esta función no usa await porque genera HTML directo
+            await asyncio.sleep(2)
+
+        elif opcion == 4:
+            print("\n🎙️ [Opción 4] - Preguntas por voz")
+            await preguntas(model_whisper, model_texto, tokenizer_texto)
+            await asyncio.sleep(2)
+
+        elif opcion == 5:
+            print("\n📄 [Opción 5] - Lector de documentos")
+            await lector_docs(model_vision, processor_vision)
+            await asyncio.sleep(2)
+
+        # ==========================================
+        # 5. AJUSTES
+        # ==========================================
+        elif opcion == 6:
+            op_ajustes = await menu_ajustes(model_whisper, model_texto, tokenizer_texto)
+            if op_ajustes == 1:
+                memoria = await cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto)
+            elif op_ajustes == 2:
+                memoria = await borrar_historial(memoria, model_whisper)
+
+            await asyncio.sleep(2)
+
+        # ==========================================
+        # 6. CERRAR SESIÓN
+        # ==========================================
+        elif opcion == 7:
+            # Despedida y salimos del bucle
+            despedida = f"¡Hasta pronto, {memoria['nombre']}! Cuídate mucho y recuerda seguir tus tratamientos."
+            print(f"\n👋 {despedida}")
+            await generar_voz(despedida)
+            break # El break es vital para salir del "while True" y apagar el asistente
