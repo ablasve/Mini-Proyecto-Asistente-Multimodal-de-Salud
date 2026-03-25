@@ -1123,7 +1123,10 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=
     2 → Borrar el historial (o eliminar...)
     3 → Volver al menú principal
 
-    Responde SOLO con el número, nada más. Si el usuario dice algo distinto a un número que esté entre el 1 y el 3, responde SOLO con None.
+    REGLAS OBLIGATORIAS:
+    - Si el usuario dice el número con letras (ej: "uno", "dos", "tres"), pásalo a formato NÚMERO (1, 2, 3).
+    - Responde SOLO con el número matemático, nada más. 
+    - Si el usuario dice algo distinto a un número que esté entre el 1 y el 3, responde SOLO con None.
     """
 
     # Preparar input para Qwen de texto
