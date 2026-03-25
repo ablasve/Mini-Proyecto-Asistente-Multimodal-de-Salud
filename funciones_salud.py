@@ -32,7 +32,7 @@ from base64 import b64decode
 async def generar_voz(texto):
     # Elegimos la voz: 'es-ES-ElviraNeural' (Mujer, España, muy clara)
     # O 'es-ES-AlvaroNeural' si prefieres hombre.
-    VOICE = "es-ES-ElviraNeural"
+    VOICE = "es-ES-AlvaroNeural"
     OUTPUT_FILE = "respuesta_asistente.mp3"
 
     communicate = edge_tts.Communicate(texto, VOICE, rate="-10%") # rate="-10%" si la quieres más lenta
