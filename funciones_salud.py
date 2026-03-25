@@ -30,7 +30,7 @@ from google.colab import output
 from base64 import b64decode
 
 # Función para generar y reproducir el audio
-async def generar_voz(texto, esperar=True, tiempo_extra=1.5):
+async def generar_voz(texto, esperar=True, tiempo_extra=1.2):
     # Elegimos la voz: 'es-ES-ElviraNeural' (Mujer, España, muy clara)
     # O 'es-ES-AlvaroNeural' si prefieres hombre.
     VOICE = "es-ES-AlvaroNeural"
@@ -1056,7 +1056,7 @@ async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
 async def borrar_historial(memoria, model_whisper):
     texto = """
     ¿Seguro que quieres eliminar tu historial?
-    Si sigues adelante borraré todo tu registro de medicamento y esta acción es irreversible.
+    Si sigues adelante borraré todo tu registro de medicamentos y esta acción es irreversible.
     ¿Quieres seguir adelante?
     """
     print(texto)
@@ -1290,6 +1290,9 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
 
     # NUEVO: Creamos la variable para controlar el menú
     es_primera_vez = True
+
+    #esperamos un poco antes de lanzar el menú para que no pise la presentación
+    await asyncio.sleep(6)
 
     # 3. Bucle del asistente, que acabará cuando el usuario decida
     while True:
