@@ -29,7 +29,8 @@ from IPython.display import Audio, display
 from google.colab import output
 from base64 import b64decode
 
-async def generar_voz(texto):
+# Función para generar y reproducir el audio
+async def generar_voz(texto, esperar=True, tiempo_extra=0.5):
     # Elegimos la voz: 'es-ES-ElviraNeural' (Mujer, España, muy clara)
     # O 'es-ES-AlvaroNeural' si prefieres hombre.
     VOICE = "es-ES-AlvaroNeural"
@@ -40,6 +41,11 @@ async def generar_voz(texto):
 
     # Reproducir en Colab
     display(Audio(OUTPUT_FILE, autoplay=True))
+
+    # Calculamos el tiempo para no solapar audios
+    if esperar:
+        tiempo_estimado = (len(texto) * 0.08) + tiempo_extra
+        await asyncio.sleep(tiempo_estimado)
 
 
 # Código JavaScript para grabar audio desde el navegador
@@ -81,6 +87,7 @@ def grabar_audio(segundos=5):
 # =====================================================================
 from datetime import datetime
 
+# función auxiliar para tener la fecha en español
 def obtener_fecha_hoy_formato_json():
     # Diccionario con las abreviaturas exactas en español
     meses_abrev = [
@@ -104,7 +111,6 @@ def obtener_fecha_hoy_formato_json():
 # =====================================================================
 import asyncio
 
-# ATENCIÓN: Añadimos los modelos de audio y texto como parámetros
 async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
     if memoria.get("nombre") is None:
         texto_bienvenida = "¡Hola! Soy tu Asistente de Salud. Como es nuestra primera vez hablando, no sé nada de ti. Para poder ayudarte mejor... ¿cómo te llamas?"
@@ -112,35 +118,35 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
         print(texto_bienvenida)
         await generar_voz(texto_bienvenida)  
 
-        # Pausa para que termine de hablar antes de grabar
-        await asyncio.sleep(13)
-
         # Grabamos al usuario
         archivo_wav = grabar_audio(segundos=5)
 
-        # 1. Transcribimos el audio con Whisper (usando el parámetro)
+        # 1. Transcribimos el audio con Whisper
         resultado = model_whisper.transcribe(archivo_wav, language="es")
         texto_bruto = resultado["text"].strip()
         print(f"Has dicho: '{texto_bruto}'")
 
-        # 2. PROCESAMOS EL NOMBRE CON QWEN (usando los parámetros)
+        # 2. PROCESAMOS EL NOMBRE CON QWEN
         print("Procesando tu nombre...")
 
+        # Preparamos el prompt estricto para extraer solo el nombre
         mensajes = [
             {"role": "system", "content": "Eres un asistente experto en extracción de entidades. Tu única tarea es leer una frase y devolver ÚNICAMENTE el nombre propio de la persona que se presenta. No añadas puntos, ni saludos, ni explicaciones. Solo la palabra del nombre."},
             {"role": "user", "content": f"Extrae el nombre de esta frase: '{texto_bruto}'"}
         ]
 
+        # Tokenizamos y mandamos al modelo
         texto_prompt = tokenizer_texto.apply_chat_template(mensajes, tokenize=False, add_generation_prompt=True)
         inputs = tokenizer_texto([texto_prompt], return_tensors="pt").to(model_texto.device)
 
+        # Generamos la respuesta con temperature baja para mayor precisión
         outputs = model_texto.generate(**inputs, max_new_tokens=10, temperature=0.1)
         nombre_limpio = tokenizer_texto.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
 
         print(f"Nombre extraído: '{nombre_limpio}'")
         # ========================================================
 
-        # Guardamos el nombre limpio en memoria
+        #Guardamos el nombre limpio en memoria
         memoria["nombre"] = nombre_limpio
         guardar_memoria(memoria)
 
@@ -166,11 +172,11 @@ import re
 import json
 from qwen_vl_utils import process_vision_info
 
-# Fijamos los números mínimo y máximo de píxeles para la foto
+# Fijamos los números mínimo y máximo de  píxeles para la foto
 MIN_PIXELS = 256 * 28 * 28
+# Aumentamos el máximo a casi 1 millón de píxeles para que lea el texto nítido
 MAX_PIXELS = 1280 * 28 * 28
 
-# ATENCIÓN: Añadimos model_vision y processor_vision como parámetros
 def analizar_receta(ruta_imagen, memoria, model_vision, processor_vision):
     prompt = f"""
 Extract prescription information from the image and return ONLY valid JSON.
@@ -233,7 +239,6 @@ History (ignore for extraction):
             out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
         ]
 
-        # Liberar memoria de GPU manualmente
         del inputs
         del generated_ids
         torch.cuda.empty_cache()
@@ -273,7 +278,6 @@ History (ignore for extraction):
 # =====================================================================
 # 6. GESTIÓN DE MEDICAMENTOS (REGISTRO)
 # =====================================================================
-# Esta función usa diccionarios y listas básicas de Python, no necesita modelos.
 def registrar_en_memoria(nuevos_datos):
     memoria = cargar_memoria()
     memoria.setdefault('medicinas', [])
@@ -308,23 +312,21 @@ async def subir_receta(memoria, model_vision, processor_vision):
     print("\n[Asistente]: Por favor, sube la foto de tu receta o medicina.")
     await generar_voz("Por favor, sube la foto de tu receta o medicina.")
 
-    # esperamos a que acabe el audio para subir el archivo
-    await asyncio.sleep(5)
-
     # Abre el selector de archivos de Colab
+    await asyncio.sleep(1) # mini margen
     subido = files.upload()
-
-    await asyncio.sleep(5)
 
     if subido:
         nombre_archivo = list(subido.keys())[0]
 
         print("--- Analizando imagen... ---")
-        # ATENCIÓN: Pasamos los modelos a la función auxiliar
         datos_extraidos = analizar_receta(nombre_archivo, memoria, model_vision, processor_vision)
 
         if datos_extraidos:
+            # Guardamos en la memoria JSON
             memoria_actualizada = registrar_en_memoria(datos_extraidos)
+
+            # Extraemos las últimas adiciones que sí se guardaron
             ultimas = memoria_actualizada.get('ultimas_adiciones', [])
 
             if ultimas:
@@ -339,8 +341,10 @@ async def subir_receta(memoria, model_vision, processor_vision):
             print(f"\n[Asistente]: {confirmacion}")
             await generar_voz(confirmacion)
 
+            # Mostramos cómo queda la lista visualmente
             mostrar_recordatorios(memoria_actualizada)
 
+            # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
                 os.remove(nombre_archivo)
                 print(f"Archivo temporal '{nombre_archivo}' eliminado.")
@@ -355,8 +359,10 @@ async def subir_receta(memoria, model_vision, processor_vision):
             print(f"\n[Asistente]: {confirmacion}")
             await generar_voz(confirmacion)
 
+            # Mostramos cómo queda la lista visualmente
             mostrar_recordatorios(memoria)
 
+            # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
                 os.remove(nombre_archivo)
                 print(f"Archivo temporal '{nombre_archivo}' eliminado.")
@@ -385,6 +391,7 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
         await generar_voz("No hay medicamentos registrados aún.")
         return memoria
 
+    # Mostrar menú al usuario
     menu_texto = (
         "Diga el número de la opción que le interesa:\n"
         "1. Eliminar un medicamento\n"
@@ -392,13 +399,14 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
     )
     print(f"\n[Asistente]: {menu_texto}")
     await generar_voz(menu_texto)
-    await asyncio.sleep(9)
 
+    # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
     resultado = model_whisper.transcribe(archivo_audio, language="es")
     eleccion_texto = resultado["text"].strip().lower()
     print(f"Has elegido: {eleccion_texto}")
 
+    # Convertir respuesta a número de opción
     prompt_normalizar = f"""
     El usuario ha dicho: "{eleccion_texto}"
 
@@ -409,6 +417,7 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
     Responde solo con el número, nada más.
     """
 
+    # Preparar input para Qwen de texto
     messages = [
         {"role": "system", "content": "Eres un asistente que convierte texto en un número de opción."},
         {"role": "user", "content": prompt_normalizar}
@@ -421,31 +430,38 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
         outputs = model_texto.generate(
             **inputs,
             max_new_tokens=10,
-            do_sample=False,
+            do_sample=False, # el modelo siempre toma el token más probable (como “greedy decoding”)
             temperature=None,
             top_p=None,
             top_k=None
         )
 
+    # Extraer número
     respuesta_completa = tokenizer_texto.decode(outputs[0], skip_special_tokens=True).strip()
+    
+    # Buscar el contenido después de la última aparición de 'assistant'
     match = re.search(r'assistant\s*(.*)', respuesta_completa, re.IGNORECASE | re.DOTALL)
-    respuesta_modelo = match.group(1).strip() if match else respuesta_completa
+    if match:
+        respuesta_modelo = match.group(1).strip()  # Esto es solo lo que generó el modelo
+    else:
+        respuesta_modelo = respuesta_completa  # fallback
 
+    # Ahora extraemos solo el dígito
     match_num = re.search(r'\b([12])\b', respuesta_modelo)
     if match_num:
         numero_opcion = int(match_num.group(1))
     else:
         await generar_voz("No entendí tu elección. Vamos a intentarlo de nuevo.")
-        await asyncio.sleep(4)
         return await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto)
 
+    # Convertir a int y manejar error
     try:
         opcion = int(numero_opcion)
     except:
         await generar_voz("No entendí tu elección. Vamos a intentarlo de nuevo.")
-        await asyncio.sleep(4)
         return await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto)
 
+    # Ejecutar flujo correspondiente
     if opcion == 1:
         memoria = await eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto)
     elif opcion == 2:
@@ -461,23 +477,24 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         await generar_voz("No hay medicamentos para eliminar.")
         return memoria
 
+    # Mostrar lista de medicamentos
     print("\n--- Lista actual de medicamentos ---")
     for i, med in enumerate(historial, 1):
         print(f"{i}. {med['nombre']} - {med['dosis']} - Fin: {med['fin']}")
     print("-----------------------------------")
     await generar_voz("Estos son tus medicamentos actuales.")
-    await asyncio.sleep(4)
 
+    # Pedir nombre del medicamento a eliminar
     mensaje = "Dime el número del medicamento que quieres eliminar."
     print(f"\n[Asistente]: {mensaje}")
     await generar_voz(mensaje)
-    await asyncio.sleep(5)
 
     archivo_audio = grabar_audio(segundos=8)
     resultado = model_whisper.transcribe(archivo_audio, language="es")
     eleccion_texto = resultado["text"].strip().lower()
     print(f"Has dicho: {eleccion_texto}")
 
+    # Buscar coincidencias
     prompt_normalizar = f"""
     El usuario ha dicho: "{eleccion_texto}"
 
@@ -521,7 +538,6 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         confirm_msg = f"¿Seguro que quieres eliminar {med['nombre']}?"
         print(confirm_msg)
         await generar_voz(confirm_msg)
-        await asyncio.sleep(10)
 
         archivo_conf = grabar_audio(segundos=5)
         resultado_conf = model_whisper.transcribe(archivo_conf, language="es")
@@ -531,16 +547,13 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto):
             memoria["medicinas"].pop(indice)
             guardar_memoria(memoria)
             await generar_voz(f"He eliminado {med['nombre']}.")
-            await asyncio.sleep(11)
             await generar_voz(f"Aquí tienes tu lista actualizada.")
             mostrar_recordatorios(memoria)
         else:
             await generar_voz("No he eliminado el medicamento.")
-            await asyncio.sleep(3)
         return memoria
     else:
         await generar_voz("Ese número no está en la lista. Vamos a probar de nuevo.")
-        await asyncio.sleep(5)
         return await eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto)
 
 
@@ -549,7 +562,6 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
 
     if not historial:
         await generar_voz("No hay medicamentos para modificar.")
-        await asyncio.sleep(4)
         return memoria
 
     print("\n--- Lista actual de medicamentos ---")
@@ -557,12 +569,10 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         print(f"{i}. {med['nombre']} - {med['dosis']} - Fin: {med['fin']}")
     print("-----------------------------------")
     await generar_voz("Estos son tus medicamentos actuales.")
-    await asyncio.sleep(5)
 
     mensaje = "Dime el número del medicamento que quieres modificar."
     print(f"\n[Asistente]: {mensaje}")
     await generar_voz(mensaje)
-    await asyncio.sleep(5)
 
     archivo_audio = grabar_audio(segundos=8)
     resultado = model_whisper.transcribe(archivo_audio, language="es")
@@ -602,25 +612,26 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         indice = int(match_num.group(1))-1
     else:
         await generar_voz("No entendí el número. Vamos a intentarlo de nuevo.")
-        await asyncio.sleep(5)
         return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto)
 
     if not (0 <= indice < len(historial)):
       await generar_voz("Ese número no está en la lista. Vamos a intentarlo de nuevo.")
-      await asyncio.sleep(5)
       return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto)
 
     med = historial[indice]
 
+    # ========================
+    # QUÉ MODIFICAR
+    # ========================
     mensaje = f"Vas a modificar {med['nombre']}. ¿Qué campo quieres cambiar: nombre, dosis o fecha fin?"
     print(f"\n[Asistente]: {mensaje}")
     await generar_voz(mensaje)
-    await asyncio.sleep(12)
     
     archivo_audio = grabar_audio(segundos=7)
     resultado = model_whisper.transcribe(archivo_audio, language="es")
     campo_texto = resultado["text"].lower()
 
+    # IA para interpretar campo
     prompt_campo = f"""
     El usuario ha dicho: "{campo_texto}"
     Devuelve SOLO una de estas palabras: nombre, dosis o fin.
@@ -643,18 +654,21 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
 
     if campo not in ["nombre", "dosis", "fin"]:
         await generar_voz("No entendí qué quieres modificar. Vamos a intentarlo de nuevo.")
-        await asyncio.sleep(4)
         return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto)
 
+    # ========================
+    # NUEVO VALOR
+    # ========================
     await generar_voz(f"Dime el nuevo valor para {campo}.")
-    await asyncio.sleep(5)
 
     archivo_audio = grabar_audio(segundos=10)
     resultado = model_whisper.transcribe(archivo_audio, language="es")
     nuevo_valor = resultado["text"].strip()
 
+    # ========================
+    # CONFIRMACIÓN
+    # ========================
     await generar_voz(f"¿Confirmas cambiar {campo} a {nuevo_valor}? (Responde con SÍ o NO)")
-    await asyncio.sleep(10)
 
     archivo_audio = grabar_audio(segundos=5)
     resultado = model_whisper.transcribe(archivo_audio, language="es")
@@ -665,6 +679,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         med[campo] = nuevo_valor
         guardar_memoria(memoria)
 
+        # Mostrar cambio en consola
         print("\n--- Cambio realizado ---")
         print(f"Medicamento: {med['nombre']}")
         print(f"{campo.upper()}:")
@@ -673,6 +688,8 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         print("------------------------")
 
         await generar_voz(f"He actualizado {campo} de {valor_anterior} a {nuevo_valor}.")
+        
+        # Mostrar lista completa actualizada
         mostrar_recordatorios(memoria)
     else:
         await generar_voz("No se ha realizado ningún cambio.")
@@ -699,6 +716,7 @@ def resumen_visual(datos_medicinas):
         dosis = med.get("dosis", "").strip()
         fin = med.get("fin", "").strip()
 
+        # ---- FILTRAR POR FECHA ----
         if fin:
             try:
                 fecha_fin = datetime.strptime(fin, "%d-%m-%Y").date()
@@ -707,10 +725,12 @@ def resumen_visual(datos_medicinas):
             except:
                 pass
 
+        # ---- LIMPIAR DOSIS ----
         dosis_limpia = re.split(r'\b(cada|durante)\b', dosis, flags=re.IGNORECASE)[0].strip(" ,.-")
         item = f"{nombre}<br><span style='color:red; font-weight:bold;'>{dosis_limpia}</span>"
         dosis_lower = dosis.lower()
 
+        # ---- DISTRIBUCIÓN ----
         if "8 horas" in dosis_lower or "3 veces" in dosis_lower:
             horarios["Mañana"].append(item)
             horarios["Mediodía"].append(item)
@@ -758,32 +778,41 @@ def resumen_visual(datos_medicinas):
 # =====================================================================
 
 async def preguntas(model_whisper, model_texto, tokenizer_texto):
+    #le decimos al usuario que puede preguntar
     mensaje_inicio = "Adelante, cuéntame. ¿Qué duda tienes sobre tu medicación o tu salud?"
     print(f"\n[Asistente]: {mensaje_inicio}")
     await generar_voz(mensaje_inicio)
-    await asyncio.sleep(6)
 
+    #grabamos el audio con la funcion que ya teniamos definida
+    #vamos a poner por ejemplo 10 segundos de escucha
     archivo_audio = grabar_audio(segundos=10)
 
+    #transcribimos con Whisper
     print("\nTranscribiendo tu consulta...")
     resultado = model_whisper.transcribe(archivo_audio, language="es")
     pregunta_usuario = resultado["text"]
     print(f"Has preguntado: {pregunta_usuario}")
 
+    #cargamos el historial para dar contexto a gemini
     memoria = cargar_memoria()
     historial_raw = memoria.get("medicinas", [])
 
+    # SOLUCIÓN AL JSON: Convertimos el JSON/Diccionario a texto natural
     historial_texto = ""
     for item in historial_raw:
         if isinstance(item, dict):
+            # Si es un diccionario, unimos sus claves y valores de forma legible
             detalles = ", ".join([f"{k}: {v}" for k, v in item.items()])
             historial_texto += f"- {detalles}\n"
         else:
+            # Por si acaso es solo una lista de strings
             historial_texto += f"- {item}\n"
 
+    # Si el historial está vacío, le damos un valor por defecto
     if not historial_texto.strip():
         historial_texto = "El usuario no tiene medicación registrada actualmente."
 
+    #construimos el prompt
     prompt = f"""
     You are a personal health assistant—direct and very respectful—designed for older adults.
     All in Spanish.
@@ -797,6 +826,7 @@ async def preguntas(model_whisper, model_texto, tokenizer_texto):
     6. Do not use complex formats or long lists, as this response will be read aloud.
     """
 
+    #generamos la respuesta con Qwen de texto 1.5B
     inputs = tokenizer_texto(prompt, return_tensors="pt").to("cuda")
 
     with torch.no_grad():
@@ -808,14 +838,22 @@ async def preguntas(model_whisper, model_texto, tokenizer_texto):
             pad_token_id=tokenizer_texto.eos_token_id
         )
 
+    # Decodificar respuesta
+    # Contamos cuántos tokens tenía el prompt
     longitud_prompt = inputs.input_ids.shape[1] 
+    # Recortamos el prompt de la salida
     tokens_generados = outputs[0][longitud_prompt:] 
 
+    # Decodificamos
     respuesta_bruta = tokenizer_texto.decode(tokens_generados, skip_special_tokens=True).strip()
+
+    # LA MAGIA: Rompemos el texto por los saltos de línea y nos quedamos SOLO con la primera línea.
+    # Así, todo lo que empiece por "Nota:" o "¿Cómo puedo ayudarte?" se va a la basura.
     solo_la_respuesta = respuesta_bruta.split("\n")[0].strip()
 
     print(f"\n Asistente: {solo_la_respuesta}")
 
+    # Limpiamos para el TTS
     texto_limpio_para_voz = solo_la_respuesta.replace("*", "").replace('"', '')
     await generar_voz(texto_limpio_para_voz)
 
@@ -843,6 +881,7 @@ def analizar_documento(nombre_archivo, model_vision, processor_vision):
             print(f"Error al convertir el PDF: {e}")
             return None
     else:
+        # si ya es una imagen no hace falta preprocesado
         paginas_a_procesar.append(nombre_archivo)
 
     texto_total = []
@@ -852,6 +891,7 @@ def analizar_documento(nombre_archivo, model_vision, processor_vision):
     DO NOT ADD ANYTHING ELSE.
     """
 
+    # BUCLE DE PROCESAMIENTO PÁGINA A PÁGINA
     try:
         for i, ruta_imagen in enumerate(paginas_a_procesar):
             print(f"Analizando página/imagen {i+1} de {len(paginas_a_procesar)}...")
@@ -910,9 +950,9 @@ async def lector_docs(model_vision, processor_vision):
     print("\n[Asistente]: Por favor, sube la foto de tu documento.")
     await generar_voz("Por favor, sube la foto de tu documento.")
 
-    await asyncio.sleep(5)
+    # Abre el selector de archivos de Colab
+    await asyncio.sleep(1)
     subido = files.upload()
-    await asyncio.sleep(5)
 
     if subido:
         nombre_archivo = list(subido.keys())[0]
@@ -923,6 +963,7 @@ async def lector_docs(model_vision, processor_vision):
         if datos_extraidos:
             await generar_voz(datos_extraidos)
 
+            # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
                 os.remove(nombre_archivo)
                 print(f"Archivo temporal '{nombre_archivo}' eliminado.")
@@ -932,6 +973,7 @@ async def lector_docs(model_vision, processor_vision):
             print(f"\n[Asistente]: {confirmacion}")
             await generar_voz(confirmacion)
 
+            # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
                 os.remove(nombre_archivo)
                 print(f"Archivo temporal '{nombre_archivo}' eliminado.")
@@ -953,9 +995,6 @@ async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
     texto_bienvenida = "¿Por qué nombre quieres que te llame?"
     print(texto_bienvenida)
     await generar_voz(texto_bienvenida)
-
-    # Pausa para que termine de hablar antes de grabar
-    await asyncio.sleep(3)
 
     # Grabamos al usuario
     archivo_wav = grabar_audio(segundos=5)
@@ -1005,7 +1044,6 @@ async def borrar_historial(memoria, model_whisper):
     """
     print(texto)
     await generar_voz(texto)
-    await asyncio.sleep(12)
 
     archivo_audio = grabar_audio(segundos=5)
     
@@ -1022,13 +1060,11 @@ async def borrar_historial(memoria, model_whisper):
         memoria = perfil_vacio
         print("Historial borrado correctamente.")
         await generar_voz("He borrado todo tu historial correctamente.")
-        await asyncio.sleep(5)
         return memoria
 
     else:
         print("No se ha realizado ningún cambio.")
         await generar_voz("No se ha realizado ningún cambio.")
-        await asyncio.sleep(3)
 
     return memoria
 
@@ -1047,8 +1083,6 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto):
     )
     print(f"[Asistente]: {menu_texto}")
     await generar_voz(menu_texto)
-
-    await asyncio.sleep(20)
 
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
@@ -1110,7 +1144,6 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto):
         error_msg = "No he logrado entender qué opción quieres. Vamos a intentarlo de nuevo."
         print(f"⚠️ {error_msg}")
         await generar_voz(error_msg)
-        await asyncio.sleep(5)
         return await menu_ajustes(model_whisper, model_texto, tokenizer_texto) # Llamada recursiva con los parámetros
 
 
@@ -1141,9 +1174,6 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto):
     )
     print(f"[Asistente]: {menu_texto}")
     await generar_voz(menu_texto)
-
-    # Esperar unos segundos para que termine de hablar (ajustado a ~16 segundos porque el menú es largo)
-    await asyncio.sleep(30)
 
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
@@ -1209,7 +1239,6 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto):
         error_msg = "No he logrado entender qué opción quieres. Vamos a intentarlo de nuevo."
         print(f"⚠️ {error_msg}")
         await generar_voz(error_msg)
-        await asyncio.sleep(5)
         return await mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto) # Llamada recursiva con los parámetros
     
 
@@ -1226,7 +1255,7 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
 
     # 2. Presentación (Aquí actualizamos la memoria con el nombre si es nuevo)
     memoria = await presentacion(memoria, model_whisper, model_texto, tokenizer_texto)
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
 
     # 3. Bucle del asistente, que acabará cuando el usuario decida
     while True:
@@ -1239,27 +1268,22 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
         if opcion == 1:
             print("\n💊 [Opción 1] - Registrar medicamentos mediante imágenes")
             memoria = await subir_receta(memoria, model_vision, processor_vision)
-            await asyncio.sleep(2)
 
         elif opcion == 2:
             print("\n✏️ [Opción 2] - Modificar o eliminar medicamentos")
             memoria = await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto)
-            await asyncio.sleep(2)
 
         elif opcion == 3:
             print("\n📋 [Opción 3] - Ver Tabla Resumen de los tratamientos")
             resumen_visual(memoria) # Esta función no usa await porque genera HTML directo
-            await asyncio.sleep(2)
 
         elif opcion == 4:
             print("\n🎙️ [Opción 4] - Preguntas por voz")
             await preguntas(model_whisper, model_texto, tokenizer_texto)
-            await asyncio.sleep(2)
 
         elif opcion == 5:
             print("\n📄 [Opción 5] - Lector de documentos")
             await lector_docs(model_vision, processor_vision)
-            await asyncio.sleep(2)
 
         # ==========================================
         # 5. AJUSTES
@@ -1271,8 +1295,6 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
             elif op_ajustes == 2:
                 memoria = await borrar_historial(memoria, model_whisper)
 
-            await asyncio.sleep(2)
-
         # ==========================================
         # 6. CERRAR SESIÓN
         # ==========================================
@@ -1282,3 +1304,6 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
             print(f"\n👋 {despedida}")
             await generar_voz(despedida)
             break # El break es vital para salir del "while True" y apagar el asistente
+            
+        # Pequeño margen para que respire el código antes de soltar el menú otra vez
+        await asyncio.sleep(1.5)
