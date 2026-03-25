@@ -30,7 +30,7 @@ from google.colab import output
 from base64 import b64decode
 
 # Función para generar y reproducir el audio
-async def generar_voz(texto, esperar=True, tiempo_extra=0.5):
+async def generar_voz(texto, esperar=True, tiempo_extra=1.5):
     # Elegimos la voz: 'es-ES-ElviraNeural' (Mujer, España, muy clara)
     # O 'es-ES-AlvaroNeural' si prefieres hombre.
     VOICE = "es-ES-AlvaroNeural"
@@ -44,7 +44,7 @@ async def generar_voz(texto, esperar=True, tiempo_extra=0.5):
 
     # Calculamos el tiempo para no solapar audios
     if esperar:
-        tiempo_estimado = (len(texto) * 0.08) + tiempo_extra
+        tiempo_estimado = (len(texto) * 0.1) + tiempo_extra
         await asyncio.sleep(tiempo_estimado)
 
 
@@ -1155,13 +1155,14 @@ import asyncio
 import re
 import torch
 
-async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto):
+# AÑADIDO: Parámetro "primera_vez" con valor por defecto True
+async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_vez=True):
     print("\n" + " · "*10)
     print("        MENÚ PRINCIPAL 🩺")
     print(" · "*10)
 
-    # Texto para pantalla y para la voz
-    menu_texto = (
+    # Texto COMPLETO para imprimir siempre en la PANTALLA (como ayuda visual)
+    menu_pantalla = (
         "Tienes las siguientes opciones:\n"
         "1. Registrar medicamentos mediante imágenes\n"
         "2. Modificar o eliminar un medicamento\n"
@@ -1170,17 +1171,23 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto):
         "5. Usar el lector de documentos\n"
         "6. Ajustes\n"
         "7. Salir del asistente\n"
-        "Di un número de opción válido."
     )
-    print(f"[Asistente]: {menu_texto}")
-    await generar_voz(menu_texto)
+    print(f"[Asistente]: {menu_pantalla}")
+    
+    # LA MAGIA: Elegimos qué dice el asistente por VOZ dependiendo de si es la primera vez
+    if primera_vez:
+        texto_voz = menu_pantalla + "Di un número de opción válido."
+    else:
+        texto_voz = "¿Qué más necesitas hacer? Di un número del 1 al 7."
+        
+    await generar_voz(texto_voz)
 
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
     print("Transcribiendo...")
     resultado = model_whisper.transcribe(archivo_audio, language="es")
     eleccion_texto = resultado["text"].strip().lower()
-    print(f"Has dicho: '{eleccion_texto}'")
+    print(f"🗣️ Has dicho: '{eleccion_texto}'")
 
     # Convertir respuesta a número de opción (1 al 7)
     prompt_normalizar = f"""
@@ -1200,7 +1207,7 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto):
 
     # Preparar input para Qwen de texto
     messages = [
-        {"role": "system", "content": "Eres un asistente que convierte la intención del usuario en un número de opción del 1 al 6."},
+        {"role": "system", "content": "Eres un asistente que convierte la intención del usuario en un número de opción del 1 al 7."},
         {"role": "user", "content": prompt_normalizar}
     ]
 
@@ -1216,7 +1223,6 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto):
             temperature=None,
             top_p=None,
             top_k=None
-
         )
 
     # Extraer número
@@ -1239,7 +1245,8 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto):
         error_msg = "No he logrado entender qué opción quieres. Vamos a intentarlo de nuevo."
         print(f"⚠️ {error_msg}")
         await generar_voz(error_msg)
-        return await mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto) # Llamada recursiva con los parámetros
+        # Si falla y vuelve a intentarlo, le pasamos False para que no le repita todo el menú largo
+        return await mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_vez=False) 
     
 
 # =====================================================================
@@ -1257,10 +1264,16 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
     memoria = await presentacion(memoria, model_whisper, model_texto, tokenizer_texto)
     await asyncio.sleep(1)
 
+    # NUEVO: Creamos la variable para controlar el menú
+    es_primera_vez = True
+
     # 3. Bucle del asistente, que acabará cuando el usuario decida
     while True:
-        # Llamamos al menú por voz (solo nos devuelve el número del 1 al 7)
-        opcion = await mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto)
+        # Llamamos al menú por voz pasándole la variable
+        opcion = await mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_vez=es_primera_vez)
+        
+        # Una vez que ha pasado por el menú, apagamos el interruptor para las siguientes vueltas
+        es_primera_vez = False
 
         # ==========================================
         # 4. RUTA HACIA LA FASE B (FUNCIONALIDADES)
