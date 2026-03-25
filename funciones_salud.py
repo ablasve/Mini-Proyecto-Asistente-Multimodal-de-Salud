@@ -384,7 +384,8 @@ def mostrar_recordatorios(memoria):
 # 8. OPCIÓN 2: MODIFICAR Y ELIMINAR 
 # =====================================================================
 
-async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto):
+# AÑADIDO: Parámetro primera_vez
+async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=True):
     historial = memoria.get("medicinas", [])
 
     if not historial:
@@ -392,13 +393,19 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
         return memoria
 
     # Mostrar menú al usuario
-    menu_texto = (
+    menu_pantalla = (
         "Diga el número de la opción que le interesa:\n"
         "1. Eliminar un medicamento\n"
         "2. Modificar un medicamento\n"
     )
-    print(f"\n[Asistente]: {menu_texto}")
-    await generar_voz(menu_texto)
+    print(f"\n[Asistente]: {menu_pantalla}")
+
+    if primera_vez:
+        texto_voz = menu_pantalla
+    else:
+        texto_voz = "Di 1 para eliminar un medicamento, o 2 para modificarlo."
+
+    await generar_voz(texto_voz)
 
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
@@ -452,14 +459,15 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
         numero_opcion = int(match_num.group(1))
     else:
         await generar_voz("No entendí tu elección. Vamos a intentarlo de nuevo.")
-        return await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto)
+        # Pasamos primera_vez=False para que no repita todo
+        return await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
     # Convertir a int y manejar error
     try:
         opcion = int(numero_opcion)
     except:
         await generar_voz("No entendí tu elección. Vamos a intentarlo de nuevo.")
-        return await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto)
+        return await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
     # Ejecutar flujo correspondiente
     if opcion == 1:
@@ -469,8 +477,8 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
 
     return memoria
 
-
-async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto):
+# AÑADIDO: Parámetro primera_vez
+async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=True):
     historial = memoria.get("medicinas", [])
 
     if not historial:
@@ -482,10 +490,14 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto):
     for i, med in enumerate(historial, 1):
         print(f"{i}. {med['nombre']} - {med['dosis']} - Fin: {med['fin']}")
     print("-----------------------------------")
-    await generar_voz("Estos son tus medicamentos actuales.")
+    
+    if primera_vez:
+        await generar_voz("Estos son tus medicamentos actuales.")
+        mensaje = "Dime el número del medicamento que quieres eliminar."
+    else:
+        mensaje = "Por favor, di un número válido de la lista para eliminar."
 
     # Pedir nombre del medicamento a eliminar
-    mensaje = "Dime el número del medicamento que quieres eliminar."
     print(f"\n[Asistente]: {mensaje}")
     await generar_voz(mensaje)
 
@@ -531,7 +543,7 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         indice = int(match_num.group(1))-1
     else:
         await generar_voz("No entendí el número. Vamos a intentarlo de nuevo.")
-        return await eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto)
+        return await eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
     if 0 <= indice < len(historial):
         med = historial[indice]
@@ -554,10 +566,10 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         return memoria
     else:
         await generar_voz("Ese número no está en la lista. Vamos a probar de nuevo.")
-        return await eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto)
+        return await eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
-
-async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
+# AÑADIDO: Parámetro primera_vez
+async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=True):
     historial = memoria.get("medicinas", [])
 
     if not historial:
@@ -568,9 +580,13 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
     for i, med in enumerate(historial, 1):
         print(f"{i}. {med['nombre']} - {med['dosis']} - Fin: {med['fin']}")
     print("-----------------------------------")
-    await generar_voz("Estos son tus medicamentos actuales.")
+    
+    if primera_vez:
+        await generar_voz("Estos son tus medicamentos actuales.")
+        mensaje = "Dime el número del medicamento que quieres modificar."
+    else:
+        mensaje = "Por favor, di un número válido de la lista para modificar."
 
-    mensaje = "Dime el número del medicamento que quieres modificar."
     print(f"\n[Asistente]: {mensaje}")
     await generar_voz(mensaje)
 
@@ -612,11 +628,11 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
         indice = int(match_num.group(1))-1
     else:
         await generar_voz("No entendí el número. Vamos a intentarlo de nuevo.")
-        return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto)
+        return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
     if not (0 <= indice < len(historial)):
       await generar_voz("Ese número no está en la lista. Vamos a intentarlo de nuevo.")
-      return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto)
+      return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
     med = historial[indice]
 
@@ -654,7 +670,8 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto):
 
     if campo not in ["nombre", "dosis", "fin"]:
         await generar_voz("No entendí qué quieres modificar. Vamos a intentarlo de nuevo.")
-        return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto)
+        # Aquí también pasamos primera_vez=False para que no lea la lista de nuevo
+        return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
     # ========================
     # NUEVO VALOR
@@ -1068,21 +1085,27 @@ async def borrar_historial(memoria, model_whisper):
 
     return memoria
 
-
-async def menu_ajustes(model_whisper, model_texto, tokenizer_texto):
+# AÑADIDO: Parámetro primera_vez
+async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=True):
     print("\n" + " · "*10)
     print("           AJUSTES 🔧")
     print(" · "*10)
-    # Texto para pantalla y para la voz
-    menu_texto = (
+    # Texto para pantalla
+    menu_pantalla = (
         "Puedes hacer las siguientes acciones: \n"
         "1. Cambiar el nombre\n"
         "2. Borrar tu historial\n"
         "3. Volver al menú principal\n"
         "Elige un número válido\n"
     )
-    print(f"[Asistente]: {menu_texto}")
-    await generar_voz(menu_texto)
+    print(f"[Asistente]: {menu_pantalla}")
+    
+    if primera_vez:
+        texto_voz = menu_pantalla
+    else:
+        texto_voz = "¿Qué ajuste necesitas? Di 1, 2 o 3."
+        
+    await generar_voz(texto_voz)
 
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
@@ -1144,8 +1167,7 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto):
         error_msg = "No he logrado entender qué opción quieres. Vamos a intentarlo de nuevo."
         print(f"⚠️ {error_msg}")
         await generar_voz(error_msg)
-        return await menu_ajustes(model_whisper, model_texto, tokenizer_texto) # Llamada recursiva con los parámetros
-
+        return await menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=False) # Llamada recursiva
 
 
 # =====================================================================
@@ -1262,7 +1284,6 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
 
     # 2. Presentación (Aquí actualizamos la memoria con el nombre si es nuevo)
     memoria = await presentacion(memoria, model_whisper, model_texto, tokenizer_texto)
-    await asyncio.sleep(1)
 
     # NUEVO: Creamos la variable para controlar el menú
     es_primera_vez = True
@@ -1317,6 +1338,3 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
             print(f"\n👋 {despedida}")
             await generar_voz(despedida)
             break # El break es vital para salir del "while True" y apagar el asistente
-            
-        # Pequeño margen para que respire el código antes de soltar el menú otra vez
-        await asyncio.sleep(1.5)
