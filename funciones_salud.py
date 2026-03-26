@@ -122,7 +122,12 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
         archivo_wav = grabar_audio(segundos=5)
 
         # 1. Transcribimos el audio con Whisper
-        resultado = model_whisper.transcribe(archivo_wav, language="es")
+        resultado = model_whisper.transcribe(
+            archivo_wav, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
         texto_bruto = resultado["text"].strip()
         print(f"Has dicho: '{texto_bruto}'")
 
@@ -409,7 +414,12 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
 
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
     eleccion_texto = resultado["text"].strip().lower()
     print(f"Has elegido: {eleccion_texto}")
 
@@ -502,7 +512,12 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
     await generar_voz(mensaje)
 
     archivo_audio = grabar_audio(segundos=8)
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
     eleccion_texto = resultado["text"].strip().lower()
     print(f"Has dicho: {eleccion_texto}")
 
@@ -552,7 +567,12 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
         await generar_voz(confirm_msg)
 
         archivo_conf = grabar_audio(segundos=5)
-        resultado_conf = model_whisper.transcribe(archivo_conf, language="es")
+        resultado_conf = model_whisper.transcribe(
+            archivo_conf, 
+            language="es",
+            condition_on_previous_text=False,
+            temperature=0.0
+        )
         respuesta_conf = resultado_conf["text"].lower()
 
         if any(p in respuesta_conf for p in ["sí", "si", "vale", "correcto"]):
@@ -591,7 +611,12 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     await generar_voz(mensaje)
 
     archivo_audio = grabar_audio(segundos=8)
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+        archivo_audio, 
+        language="es",
+        condition_on_previous_text=False,
+        temperature=0.0
+    )
     eleccion_texto = resultado["text"].strip().lower()
 
     prompt_normalizar = f"""
@@ -644,7 +669,12 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     await generar_voz(mensaje)
     
     archivo_audio = grabar_audio(segundos=7)
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
     campo_texto = resultado["text"].lower()
 
     # IA para interpretar campo
@@ -679,7 +709,12 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     await generar_voz(f"Dime el nuevo valor para {campo}.")
 
     archivo_audio = grabar_audio(segundos=10)
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
     nuevo_valor = resultado["text"].strip()
 
     # ========================
@@ -688,7 +723,12 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     await generar_voz(f"¿Confirmas cambiar {campo} a {nuevo_valor}? (Responde con SÍ o NO)")
 
     archivo_audio = grabar_audio(segundos=5)
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False,
+            temperature=0.0
+        )
     confirmacion = resultado["text"].lower()
 
     if any(p in confirmacion for p in ["sí", "si", "vale", "correcto"]):
@@ -806,7 +846,12 @@ async def preguntas(model_whisper, model_texto, tokenizer_texto):
 
     #transcribimos con Whisper
     print("\nTranscribiendo tu consulta...")
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
     pregunta_usuario = resultado["text"]
     print(f"Has preguntado: {pregunta_usuario}")
 
@@ -1017,7 +1062,12 @@ async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
     archivo_wav = grabar_audio(segundos=5)
 
     # 1. Transcribimos el audio con Whisper (usando el parámetro)
-    resultado = model_whisper.transcribe(archivo_wav, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_wav, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
     texto_bruto = resultado["text"].strip()
     print(f"Has dicho: '{texto_bruto}'")
 
@@ -1065,7 +1115,12 @@ async def borrar_historial(memoria, model_whisper):
     archivo_audio = grabar_audio(segundos=5)
     
     # Transcribimos con Whisper (usando el parámetro)
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False,
+            temperature=0.0
+        )
     confirmacion = resultado["text"].lower()
 
     if any(p in confirmacion for p in ["sí", "si", "vale", "correcto"]):
@@ -1110,7 +1165,12 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
     print("Transcribiendo...")
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
     eleccion_texto = resultado["text"].strip().lower()
     print(f"Has dicho: '{eleccion_texto}'")
 
@@ -1210,7 +1270,12 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
     print("Transcribiendo...")
-    resultado = model_whisper.transcribe(archivo_audio, language="es")
+    resultado = model_whisper.transcribe(
+            archivo_audio, 
+            language="es",
+            condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
+            temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
+        )
     eleccion_texto = resultado["text"].strip().lower()
     print(f"🗣️ Has dicho: '{eleccion_texto}'")
 
