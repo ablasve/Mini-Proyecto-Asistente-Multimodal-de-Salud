@@ -26,6 +26,8 @@ El repositorio está organizado de la siguiente manera:
 * `funciones_salud.py` : Script de funciones definidas que contiene toda la lógica de backend, llamadas a los modelos, gestión de la memoria (JSON) y renderizado de la interfaz HTML.
 * `Prueba_asistente.ipynb` : Cuaderno de Jupyter principal preparado para cargar `funciones_salud.py` y ejecutar el bucle del asistente final.
 * `Fase A.ipynb` / `Fase B.ipynb` : Archivos de trabajo y experimentación donde se desarrollaron y testearon los distintos módulos (audio, visión, prompts) por separado y se definieron y probaron las diferentes funciones aisladamente antes de su integración final.
+* * `datos` : Carpeta con ejemplos de recetas (pdf/imagenes) y otros archivos empleados durante el desarrollo y la prueba del asistente.
+* * `imagenes` : Carpeta de imágenes con los grafos y otros archivos utilizados en la memoria.
 
 ## 🚀 Cómo ejecutar el proyecto 
 
