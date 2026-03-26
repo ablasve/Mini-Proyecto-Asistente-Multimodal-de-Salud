@@ -162,6 +162,7 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
         resultado = model_whisper.transcribe(
             archivo_wav, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
@@ -453,6 +454,7 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
@@ -554,6 +556,7 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
@@ -610,6 +613,7 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
         resultado_conf = model_whisper.transcribe(
             archivo_conf, 
             language="es",
+            no_speech_threshold=0.3,
             condition_on_previous_text=False,
             temperature=0.0
         )
@@ -658,6 +662,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     resultado = model_whisper.transcribe(
         archivo_audio, 
         language="es",
+        no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
         condition_on_previous_text=False,
         temperature=0.0
     )
@@ -719,6 +724,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
@@ -762,6 +768,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
@@ -778,6 +785,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3,
             condition_on_previous_text=False,
             temperature=0.0
         )
@@ -900,6 +908,7 @@ async def preguntas(model_whisper, model_texto, tokenizer_texto):
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
@@ -1117,6 +1126,7 @@ async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
     resultado = model_whisper.transcribe(
             archivo_wav, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
@@ -1166,6 +1176,7 @@ async def borrar_historial(memoria, model_whisper):
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3,
             condition_on_previous_text=False,
             temperature=0.0
         )
@@ -1215,6 +1226,7 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
@@ -1317,6 +1329,7 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
+            no_speech_threshold=0.3, # si no detecta voz, que no intente transcribir nada
             condition_on_previous_text=False, #parametros antihistorial para que no se confunda con lo que ha dicho antes
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
