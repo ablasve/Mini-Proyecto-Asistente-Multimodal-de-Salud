@@ -1,4 +1,41 @@
 # =====================================================================
+# 0. INTERFAZ HTML DE CHAT PARA COLAB (SUSTITUYE A LOS PRINT)
+# =====================================================================
+
+from IPython.display import display, HTML
+
+def interfaz_chat(texto, emisor="asistente"):
+    """
+    Sustituye a los print() para crear burbujas de chat visuales en la celda de Colab.
+    Emisores: 'asistente', 'usuario', 'sistema', 'alerta'
+    """
+    # Limpiamos los saltos de línea básicos de consola a HTML
+    texto = str(texto).replace('\n', '<br>')
+    
+    if emisor == "asistente":
+        html = f"""<div style="background-color: #E3F2FD; border-radius: 15px; padding: 15px; margin: 10px 0; border-left: 5px solid #2196F3; font-family: Arial, sans-serif; max-width: 85%; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
+            <b style="color: #1565C0;">🩺 Asistente:</b><br><span style="font-size: 16px;">{texto}</span>
+        </div>"""
+    
+    elif emisor == "usuario":
+        html = f"""<div style="background-color: #F5F5F5; border-radius: 15px; padding: 15px; margin: 10px 0; border-right: 5px solid #4CAF50; font-family: Arial, sans-serif; max-width: 85%; margin-left: auto; text-align: right; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
+            <b style="color: #2E7D32;">👤 Tú:</b><br><span style="font-size: 16px;">{texto}</span>
+        </div>"""
+        
+    elif emisor == "sistema":
+        html = f"""<div style="background-color: #FFF3E0; border-radius: 10px; padding: 10px; margin: 10px auto; text-align: center; font-family: Arial, sans-serif; font-size: 13px; color: #E65100; max-width: 60%;">
+            ⚙️ <i>{texto}</i>
+        </div>"""
+        
+    elif emisor == "alerta":
+        html = f"""<div style="background-color: #FFEBEE; border-radius: 10px; padding: 10px; margin: 10px auto; text-align: center; font-family: Arial, sans-serif; font-size: 14px; color: #C62828; border: 1px solid #EF9A9A;">
+            ⚠️ <b>{texto}</b>
+        </div>"""
+
+    display(HTML(html))
+
+
+# =====================================================================
 # 1. FUNCIONES DE MEMORIA Y GESTIÓN DE DATOS
 # =====================================================================
 import os
@@ -73,7 +110,7 @@ var record = time => new Promise(async resolve => {
 """
 
 def grabar_audio(segundos=5):
-    print(f"Escuchando durante {segundos} segundos...")
+    interfaz_chat(f"Escuchando durante {segundos} segundos...", emisor="sistema")
     output.eval_js(RECORD_JS)
     audio_b64 = output.eval_js(f"record({segundos*1000})")
     audio_bytes = b64decode(audio_b64.split(',')[1])
@@ -115,7 +152,7 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
     if memoria.get("nombre") is None:
         texto_bienvenida = "¡Hola! Soy tu Asistente de Salud. Como es nuestra primera vez hablando, no sé nada de ti. Para poder ayudarte mejor... ¿cómo te llamas?"
 
-        print(texto_bienvenida)
+        interfaz_chat(texto_bienvenida, emisor="asistente")
         await generar_voz(texto_bienvenida)  
 
         # Grabamos al usuario
@@ -129,10 +166,10 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
         texto_bruto = resultado["text"].strip()
-        print(f"Has dicho: '{texto_bruto}'")
+        interfaz_chat(f"{texto_bruto}", emisor="usuario")
 
         # 2. PROCESAMOS EL NOMBRE CON QWEN
-        print("Procesando tu nombre...")
+        interfaz_chat("Procesando tu nombre...", emisor="sistema")
 
         # Preparamos el prompt estricto para extraer solo el nombre
         mensajes = [
@@ -148,7 +185,7 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
         outputs = model_texto.generate(**inputs, max_new_tokens=10, temperature=0.1)
         nombre_limpio = tokenizer_texto.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
 
-        print(f"Nombre extraído: '{nombre_limpio}'")
+        interfaz_chat(f"Nombre extraído: '{nombre_limpio}'", emisor="sistema")
         # ========================================================
 
         #Guardamos el nombre limpio en memoria
@@ -156,7 +193,7 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
         guardar_memoria(memoria)
 
         texto_confirmacion = f"¡Perfecto, {memoria['nombre']}! He creado tu perfil. Ya podemos empezar con las consultas."
-        print(f"\n {texto_confirmacion}")
+        interfaz_chat(texto_confirmacion, emisor="asistente")
         await generar_voz(texto_confirmacion)
 
         # RETORNAMOS LA MEMORIA ACTUALIZADA
@@ -164,7 +201,7 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
 
     else:
         texto_retorno = f"¡Hola de nuevo, {memoria['nombre']}! ¿Qué hacemos hoy?"
-        print(f"{texto_retorno}")
+        interfaz_chat(texto_retorno, emisor="asistente")
         await generar_voz(texto_retorno)
         return memoria
 
@@ -222,7 +259,7 @@ History (ignore for extraction):
     ]
 
     try:
-        print("El modelo local está leyendo la imagen...")
+        interfaz_chat("El modelo de visión está leyendo la imagen...", emisor="sistema")
 
         text = processor_vision.apply_chat_template(mensajes, tokenize=False, add_generation_prompt=True)
         image_inputs, video_inputs = process_vision_info(mensajes)
@@ -256,8 +293,8 @@ History (ignore for extraction):
         # Extraer JSON
         match = re.search(r'\{.*\}', texto_respuesta, re.DOTALL)
         if not match:
-            print("No hay JSON válido en la respuesta")
-            print(texto_respuesta)
+            interfaz_chat("No hay JSON válido en la respuesta", emisor="alerta")
+            interfaz_chat(texto_respuesta, emisor="sistema")
             return None
 
         json_text = match.group(0)
@@ -276,7 +313,7 @@ History (ignore for extraction):
         return [lista, adiciones]
 
     except Exception as e:
-        print("Error:", e)
+        interfaz_chat(f"Error: {e}", emisor="alerta")
         return None
 
 
@@ -314,8 +351,9 @@ def registrar_en_memoria(nuevos_datos):
 from google.colab import files
 
 async def subir_receta(memoria, model_vision, processor_vision):
-    print("\n[Asistente]: Por favor, sube la foto de tu receta o medicina.")
-    await generar_voz("Por favor, sube la foto de tu receta o medicina.")
+    texto_peticion = "Por favor, sube la foto de tu receta o medicina."
+    interfaz_chat(texto_peticion, emisor="asistente")
+    await generar_voz(texto_peticion)
 
     # Abre el selector de archivos de Colab
     await asyncio.sleep(1) # mini margen
@@ -324,7 +362,7 @@ async def subir_receta(memoria, model_vision, processor_vision):
     if subido:
         nombre_archivo = list(subido.keys())[0]
 
-        print("--- Analizando imagen... ---")
+        interfaz_chat("Analizando imagen...", emisor="sistema")
         datos_extraidos = analizar_receta(nombre_archivo, memoria, model_vision, processor_vision)
 
         if datos_extraidos:
@@ -343,7 +381,7 @@ async def subir_receta(memoria, model_vision, processor_vision):
             else:
                 confirmacion = "No se han añadido nuevas medicinas; ya estaban en tu lista."
 
-            print(f"\n[Asistente]: {confirmacion}")
+            interfaz_chat(confirmacion, emisor="asistente")
             await generar_voz(confirmacion)
 
             # Mostramos cómo queda la lista visualmente
@@ -352,16 +390,13 @@ async def subir_receta(memoria, model_vision, processor_vision):
             # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
                 os.remove(nombre_archivo)
-                print(f"Archivo temporal '{nombre_archivo}' eliminado.")
+                interfaz_chat(f"Archivo temporal '{nombre_archivo}' eliminado.", emisor="sistema")
 
             return memoria_actualizada
 
         else:
-            confirmacion = f"""
-            He leído la información que me has proporcionado, y ya estaba introducida en el registro.
-            Aquí tienes el registro y puedes comprobar que está todo en orden:
-            """
-            print(f"\n[Asistente]: {confirmacion}")
+            confirmacion = "He leído la información que me has proporcionado, y ya estaba introducida en el registro. Aquí tienes el registro y puedes comprobar que está todo en orden:"
+            interfaz_chat(confirmacion, emisor="asistente")
             await generar_voz(confirmacion)
 
             # Mostramos cómo queda la lista visualmente
@@ -370,7 +405,7 @@ async def subir_receta(memoria, model_vision, processor_vision):
             # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
                 os.remove(nombre_archivo)
-                print(f"Archivo temporal '{nombre_archivo}' eliminado.")
+                interfaz_chat(f"Archivo temporal '{nombre_archivo}' eliminado.", emisor="sistema")
 
             return memoria
 
@@ -378,11 +413,11 @@ async def subir_receta(memoria, model_vision, processor_vision):
     return memoria
 
 def mostrar_recordatorios(memoria):
-    print("\n--- TUS MEDICAMENTOS REGISTRADOS ---")
+    texto = "<b>--- TUS MEDICAMENTOS REGISTRADOS ---</b><br>"
     for m in memoria.get("medicinas", []):
         fin = m.get('fin', '')
-        print(f"💊 {m['nombre']} - {m['dosis']} - Fecha Fin Tratamiento: {fin}")
-    print("------------------------------------\n")
+        texto += f"💊 {m['nombre']} - {m['dosis']} - Fecha Fin: {fin}<br>"
+    interfaz_chat(texto, emisor="sistema")
 
 
 # =====================================================================
@@ -394,6 +429,7 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
     historial = memoria.get("medicinas", [])
 
     if not historial:
+        interfaz_chat("No hay medicamentos registrados aún.", emisor="asistente")
         await generar_voz("No hay medicamentos registrados aún.")
         return memoria
 
@@ -403,7 +439,7 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
         "1. Eliminar un medicamento\n"
         "2. Modificar un medicamento\n"
     )
-    print(f"\n[Asistente]: {menu_pantalla}")
+    interfaz_chat(menu_pantalla, emisor="asistente")
 
     if primera_vez:
         texto_voz = menu_pantalla
@@ -421,7 +457,7 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
     eleccion_texto = resultado["text"].strip().lower()
-    print(f"Has elegido: {eleccion_texto}")
+    interfaz_chat(f"{eleccion_texto}", emisor="usuario")
 
     # Convertir respuesta a número de opción
     prompt_normalizar = f"""
@@ -468,6 +504,7 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
     if match_num:
         numero_opcion = int(match_num.group(1))
     else:
+        interfaz_chat("No entendí tu elección. Vamos a intentarlo de nuevo.", emisor="alerta")
         await generar_voz("No entendí tu elección. Vamos a intentarlo de nuevo.")
         # Pasamos primera_vez=False para que no repita todo
         return await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
@@ -476,6 +513,7 @@ async def cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto
     try:
         opcion = int(numero_opcion)
     except:
+        interfaz_chat("No entendí tu elección. Vamos a intentarlo de nuevo.", emisor="alerta")
         await generar_voz("No entendí tu elección. Vamos a intentarlo de nuevo.")
         return await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
@@ -492,14 +530,15 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
     historial = memoria.get("medicinas", [])
 
     if not historial:
+        interfaz_chat("No hay medicamentos para eliminar.", emisor="asistente")
         await generar_voz("No hay medicamentos para eliminar.")
         return memoria
 
     # Mostrar lista de medicamentos
-    print("\n--- Lista actual de medicamentos ---")
+    texto_lista = "<b>--- Lista actual de medicamentos ---</b><br>"
     for i, med in enumerate(historial, 1):
-        print(f"{i}. {med['nombre']} - {med['dosis']} - Fin: {med['fin']}")
-    print("-----------------------------------")
+        texto_lista += f"{i}. {med['nombre']} - {med['dosis']} - Fin: {med['fin']}<br>"
+    interfaz_chat(texto_lista, emisor="sistema")
     
     if primera_vez:
         await generar_voz("Estos son tus medicamentos actuales.")
@@ -508,7 +547,7 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
         mensaje = "Por favor, di un número válido de la lista para eliminar."
 
     # Pedir nombre del medicamento a eliminar
-    print(f"\n[Asistente]: {mensaje}")
+    interfaz_chat(mensaje, emisor="asistente")
     await generar_voz(mensaje)
 
     archivo_audio = grabar_audio(segundos=8)
@@ -519,7 +558,7 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
     eleccion_texto = resultado["text"].strip().lower()
-    print(f"Has dicho: {eleccion_texto}")
+    interfaz_chat(f"{eleccion_texto}", emisor="usuario")
 
     # Buscar coincidencias
     prompt_normalizar = f"""
@@ -557,13 +596,14 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
     if match_num:
         indice = int(match_num.group(1))-1
     else:
+        interfaz_chat("No entendí el número. Vamos a intentarlo de nuevo.", emisor="alerta")
         await generar_voz("No entendí el número. Vamos a intentarlo de nuevo.")
         return await eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
     if 0 <= indice < len(historial):
         med = historial[indice]
         confirm_msg = f"¿Seguro que quieres eliminar {med['nombre']}?"
-        print(confirm_msg)
+        interfaz_chat(confirm_msg, emisor="asistente")
         await generar_voz(confirm_msg)
 
         archivo_conf = grabar_audio(segundos=5)
@@ -578,13 +618,16 @@ async def eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, pri
         if any(p in respuesta_conf for p in ["sí", "si", "vale", "correcto"]):
             memoria["medicinas"].pop(indice)
             guardar_memoria(memoria)
+            interfaz_chat(f"He eliminado {med['nombre']}.", emisor="asistente")
             await generar_voz(f"He eliminado {med['nombre']}.")
             await generar_voz(f"Aquí tienes tu lista actualizada.")
             mostrar_recordatorios(memoria)
         else:
+            interfaz_chat("No he eliminado el medicamento.", emisor="asistente")
             await generar_voz("No he eliminado el medicamento.")
         return memoria
     else:
+        interfaz_chat("Ese número no está en la lista. Vamos a probar de nuevo.", emisor="alerta")
         await generar_voz("Ese número no está en la lista. Vamos a probar de nuevo.")
         return await eliminar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
@@ -593,13 +636,14 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     historial = memoria.get("medicinas", [])
 
     if not historial:
+        interfaz_chat("No hay medicamentos para modificar.", emisor="asistente")
         await generar_voz("No hay medicamentos para modificar.")
         return memoria
 
-    print("\n--- Lista actual de medicamentos ---")
+    texto_lista = "<b>--- Lista actual de medicamentos ---</b><br>"
     for i, med in enumerate(historial, 1):
-        print(f"{i}. {med['nombre']} - {med['dosis']} - Fin: {med['fin']}")
-    print("-----------------------------------")
+        texto_lista += f"{i}. {med['nombre']} - {med['dosis']} - Fin: {med['fin']}<br>"
+    interfaz_chat(texto_lista, emisor="sistema")
     
     if primera_vez:
         await generar_voz("Estos son tus medicamentos actuales.")
@@ -607,7 +651,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     else:
         mensaje = "Por favor, di un número válido de la lista para modificar."
 
-    print(f"\n[Asistente]: {mensaje}")
+    interfaz_chat(mensaje, emisor="asistente")
     await generar_voz(mensaje)
 
     archivo_audio = grabar_audio(segundos=8)
@@ -618,6 +662,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
         temperature=0.0
     )
     eleccion_texto = resultado["text"].strip().lower()
+    interfaz_chat(f"{eleccion_texto}", emisor="usuario")
 
     prompt_normalizar = f"""
     El usuario ha dicho: "{eleccion_texto}"
@@ -652,10 +697,12 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     if match_num:
         indice = int(match_num.group(1))-1
     else:
+        interfaz_chat("No entendí el número. Vamos a intentarlo de nuevo.", emisor="alerta")
         await generar_voz("No entendí el número. Vamos a intentarlo de nuevo.")
         return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
     if not (0 <= indice < len(historial)):
+      interfaz_chat("Ese número no está en la lista. Vamos a intentarlo de nuevo.", emisor="alerta")
       await generar_voz("Ese número no está en la lista. Vamos a intentarlo de nuevo.")
       return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
 
@@ -665,7 +712,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     # QUÉ MODIFICAR
     # ========================
     mensaje = f"Vas a modificar {med['nombre']}. ¿Qué campo quieres cambiar: nombre, dosis o fecha fin?"
-    print(f"\n[Asistente]: {mensaje}")
+    interfaz_chat(mensaje, emisor="asistente")
     await generar_voz(mensaje)
     
     archivo_audio = grabar_audio(segundos=7)
@@ -676,6 +723,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
     campo_texto = resultado["text"].lower()
+    interfaz_chat(f"{campo_texto}", emisor="usuario")
 
     # IA para interpretar campo
     prompt_campo = f"""
@@ -699,6 +747,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     campo = match.group(1).strip() if match else respuesta.strip()
 
     if campo not in ["nombre", "dosis", "fin"]:
+        interfaz_chat("No entendí qué quieres modificar. Vamos a intentarlo de nuevo.", emisor="alerta")
         await generar_voz("No entendí qué quieres modificar. Vamos a intentarlo de nuevo.")
         # Aquí también pasamos primera_vez=False para que no lea la lista de nuevo
         return await modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, primera_vez=False)
@@ -706,6 +755,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
     # ========================
     # NUEVO VALOR
     # ========================
+    interfaz_chat(f"Dime el nuevo valor para {campo}.", emisor="asistente")
     await generar_voz(f"Dime el nuevo valor para {campo}.")
 
     archivo_audio = grabar_audio(segundos=10)
@@ -716,10 +766,12 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
     nuevo_valor = resultado["text"].strip()
+    interfaz_chat(f"{nuevo_valor}", emisor="usuario")
 
     # ========================
     # CONFIRMACIÓN
     # ========================
+    interfaz_chat(f"¿Confirmas cambiar {campo} a {nuevo_valor}? (Responde con SÍ o NO)", emisor="asistente")
     await generar_voz(f"¿Confirmas cambiar {campo} a {nuevo_valor}? (Responde con SÍ o NO)")
 
     archivo_audio = grabar_audio(segundos=5)
@@ -730,25 +782,24 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
             temperature=0.0
         )
     confirmacion = resultado["text"].lower()
+    interfaz_chat(f"{confirmacion}", emisor="usuario")
 
     if any(p in confirmacion for p in ["sí", "si", "vale", "correcto"]):
         valor_anterior = med[campo]
         med[campo] = nuevo_valor
         guardar_memoria(memoria)
 
-        # Mostrar cambio en consola
-        print("\n--- Cambio realizado ---")
-        print(f"Medicamento: {med['nombre']}")
-        print(f"{campo.upper()}:")
-        print(f"  Antes: {valor_anterior}")
-        print(f"  Ahora: {nuevo_valor}")
-        print("------------------------")
+        # Mostrar cambio en interfaz
+        texto_cambio = f"<b>--- Cambio realizado ---</b><br>Medicamento: {med['nombre']}<br>{campo.upper()}:<br>Antes: {valor_anterior}<br>Ahora: {nuevo_valor}"
+        interfaz_chat(texto_cambio, emisor="sistema")
 
+        interfaz_chat(f"He actualizado {campo} de {valor_anterior} a {nuevo_valor}.", emisor="asistente")
         await generar_voz(f"He actualizado {campo} de {valor_anterior} a {nuevo_valor}.")
         
         # Mostrar lista completa actualizada
         mostrar_recordatorios(memoria)
     else:
+        interfaz_chat("No se ha realizado ningún cambio.", emisor="asistente")
         await generar_voz("No se ha realizado ningún cambio.")
 
     return memoria
@@ -760,7 +811,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
 from IPython.display import display, HTML
 
 def resumen_visual(datos_medicinas):
-    print("Organizando horarios con lógica exacta...")
+    interfaz_chat("Organizando horarios con lógica exacta...", emisor="sistema")
 
     if isinstance(datos_medicinas, dict):
         datos_medicinas = datos_medicinas.get("medicinas", [])
@@ -837,7 +888,7 @@ def resumen_visual(datos_medicinas):
 async def preguntas(model_whisper, model_texto, tokenizer_texto):
     #le decimos al usuario que puede preguntar
     mensaje_inicio = "Adelante, cuéntame. ¿Qué duda tienes sobre tu medicación o tu salud?"
-    print(f"\n[Asistente]: {mensaje_inicio}")
+    interfaz_chat(mensaje_inicio, emisor="asistente")
     await generar_voz(mensaje_inicio)
 
     #grabamos el audio con la funcion que ya teniamos definida
@@ -845,7 +896,7 @@ async def preguntas(model_whisper, model_texto, tokenizer_texto):
     archivo_audio = grabar_audio(segundos=10)
 
     #transcribimos con Whisper
-    print("\nTranscribiendo tu consulta...")
+    interfaz_chat("Transcribiendo tu consulta...", emisor="sistema")
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
@@ -853,7 +904,7 @@ async def preguntas(model_whisper, model_texto, tokenizer_texto):
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
     pregunta_usuario = resultado["text"]
-    print(f"Has preguntado: {pregunta_usuario}")
+    interfaz_chat(f"{pregunta_usuario}", emisor="usuario")
 
     #cargamos el historial para dar contexto a gemini
     memoria = cargar_memoria()
@@ -913,7 +964,7 @@ async def preguntas(model_whisper, model_texto, tokenizer_texto):
     # Así, todo lo que empiece por "Nota:" o "¿Cómo puedo ayudarte?" se va a la basura.
     solo_la_respuesta = respuesta_bruta.split("\n")[0].strip()
 
-    print(f"\n Asistente: {solo_la_respuesta}")
+    interfaz_chat(solo_la_respuesta, emisor="asistente")
 
     # Limpiamos para el TTS
     texto_limpio_para_voz = solo_la_respuesta.replace("*", "").replace('"', '')
@@ -930,7 +981,7 @@ def analizar_documento(nombre_archivo, model_vision, processor_vision):
     paginas_a_procesar = []
 
     if nombre_archivo.lower().endswith('.pdf'):
-        print(f"Convirtiendo PDF a imágenes: {nombre_archivo}")
+        interfaz_chat(f"Convirtiendo PDF a imágenes: {nombre_archivo}", emisor="sistema")
         try:
             imagenes_pdf = convert_from_path(nombre_archivo, dpi=200)
 
@@ -940,7 +991,7 @@ def analizar_documento(nombre_archivo, model_vision, processor_vision):
                 paginas_a_procesar.append(temp_img_path)
 
         except Exception as e:
-            print(f"Error al convertir el PDF: {e}")
+            interfaz_chat(f"Error al convertir el PDF: {e}", emisor="alerta")
             return None
     else:
         # si ya es una imagen no hace falta preprocesado
@@ -956,7 +1007,7 @@ def analizar_documento(nombre_archivo, model_vision, processor_vision):
     # BUCLE DE PROCESAMIENTO PÁGINA A PÁGINA
     try:
         for i, ruta_imagen in enumerate(paginas_a_procesar):
-            print(f"Analizando página/imagen {i+1} de {len(paginas_a_procesar)}...")
+            interfaz_chat(f"Analizando página/imagen {i+1} de {len(paginas_a_procesar)}...", emisor="sistema")
 
             mensajes = [{
                 "role": "user",
@@ -966,7 +1017,7 @@ def analizar_documento(nombre_archivo, model_vision, processor_vision):
                 ],
             }]
 
-            print("El modelo local está leyendo la imagen...")
+            interfaz_chat("El modelo de visión está leyendo la imagen...", emisor="sistema")
             text = processor_vision.apply_chat_template(mensajes, tokenize=False, add_generation_prompt=True)
             image_inputs, video_inputs = process_vision_info(mensajes)
 
@@ -1002,14 +1053,14 @@ def analizar_documento(nombre_archivo, model_vision, processor_vision):
                 os.remove(ruta_imagen)
 
     except Exception as e:
-        print(f"Error durante la inferencia del modelo: {e}")
+        interfaz_chat(f"Error durante la inferencia del modelo: {e}", emisor="alerta")
         return None
 
     return "\n\n".join(texto_total)
 
 
 async def lector_docs(model_vision, processor_vision):
-    print("\n[Asistente]: Por favor, sube la foto de tu documento.")
+    interfaz_chat("Por favor, sube la foto de tu documento.", emisor="asistente")
     await generar_voz("Por favor, sube la foto de tu documento.")
 
     # Abre el selector de archivos de Colab
@@ -1019,29 +1070,30 @@ async def lector_docs(model_vision, processor_vision):
     if subido:
         nombre_archivo = list(subido.keys())[0]
 
-        print("--- Analizando documento... ---")
+        interfaz_chat("Analizando documento...", emisor="sistema")
         datos_extraidos = analizar_documento(nombre_archivo, model_vision, processor_vision)
 
         if datos_extraidos:
+            interfaz_chat(datos_extraidos, emisor="asistente")
             await generar_voz(datos_extraidos)
 
             # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
                 os.remove(nombre_archivo)
-                print(f"Archivo temporal '{nombre_archivo}' eliminado.")
+                interfaz_chat(f"Archivo temporal '{nombre_archivo}' eliminado.", emisor="sistema")
             return
         else:
             confirmacion = "Lo siento, el documento estaba vacío o no tenía el formato adecuado."
-            print(f"\n[Asistente]: {confirmacion}")
+            interfaz_chat(confirmacion, emisor="asistente")
             await generar_voz(confirmacion)
 
             # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
                 os.remove(nombre_archivo)
-                print(f"Archivo temporal '{nombre_archivo}' eliminado.")
+                interfaz_chat(f"Archivo temporal '{nombre_archivo}' eliminado.", emisor="sistema")
     else:
         conf = "Lo siento, no se ha podido cargar el documento."
-        print(conf)
+        interfaz_chat(conf, emisor="alerta")
 
 
 
@@ -1055,7 +1107,7 @@ import asyncio
 
 async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
     texto_bienvenida = "¿Por qué nombre quieres que te llame?"
-    print(texto_bienvenida)
+    interfaz_chat(texto_bienvenida, emisor="asistente")
     await generar_voz(texto_bienvenida)
 
     # Grabamos al usuario
@@ -1069,10 +1121,10 @@ async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
     texto_bruto = resultado["text"].strip()
-    print(f"Has dicho: '{texto_bruto}'")
+    interfaz_chat(f"{texto_bruto}", emisor="usuario")
 
     # 2. PROCESAMOS EL NOMBRE CON QWEN (usando los parámetros)
-    print("Procesando tu nombre...")
+    interfaz_chat("Procesando tu nombre...", emisor="sistema")
 
     # Preparamos el prompt estricto para extraer solo el nombre
     mensajes = [
@@ -1088,15 +1140,15 @@ async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
     outputs = model_texto.generate(**inputs, max_new_tokens=10, temperature=0.1)
     nombre_limpio = tokenizer_texto.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
 
-    print(f"Nombre extraído: '{nombre_limpio}'")
+    interfaz_chat(f"Nombre extraído: '{nombre_limpio}'", emisor="sistema")
     # ========================================================
 
     # Guardamos el nombre limpio en memoria
     memoria["nombre"] = nombre_limpio
     guardar_memoria(memoria)
 
-    texto_confirmacion = f"¡Perfecto, {memoria['nombre']}! Ya he cambiado tu nombre."
-    print(f"¡Perfecto, {memoria['nombre']}! Ya he cambiado tu nombre. 🤗")
+    texto_confirmacion = f"¡Perfecto, {memoria['nombre']}! Ya he cambiado tu nombre. 🤗"
+    interfaz_chat(texto_confirmacion, emisor="asistente")
     await generar_voz(texto_confirmacion)
 
     # RETORNAMOS LA MEMORIA ACTUALIZADA
@@ -1104,12 +1156,8 @@ async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
 
 
 async def borrar_historial(memoria, model_whisper):
-    texto = """
-    ¿Seguro que quieres eliminar tu historial?
-    Si sigues adelante borraré todo tu registro de medicamentos y esta acción es irreversible.
-    ¿Quieres seguir adelante?
-    """
-    print(texto)
+    texto = "¿Seguro que quieres eliminar tu historial? Si sigues adelante borraré todo tu registro de medicamentos y esta acción es irreversible. ¿Quieres seguir adelante?"
+    interfaz_chat(texto, emisor="asistente")
     await generar_voz(texto)
 
     archivo_audio = grabar_audio(segundos=5)
@@ -1122,6 +1170,7 @@ async def borrar_historial(memoria, model_whisper):
             temperature=0.0
         )
     confirmacion = resultado["text"].lower()
+    interfaz_chat(confirmacion, emisor="usuario")
 
     if any(p in confirmacion for p in ["sí", "si", "vale", "correcto"]):
         # Mantenemos el nombre pero borramos el resto
@@ -1130,33 +1179,31 @@ async def borrar_historial(memoria, model_whisper):
             json.dump(perfil_vacio, f, indent=4)
             
         memoria = perfil_vacio
-        print("Historial borrado correctamente.")
+        interfaz_chat("Historial borrado correctamente.", emisor="sistema")
         await generar_voz("He borrado todo tu historial correctamente.")
         return memoria
 
     else:
-        print("No se ha realizado ningún cambio.")
+        interfaz_chat("No se ha realizado ningún cambio.", emisor="sistema")
         await generar_voz("No se ha realizado ningún cambio.")
 
     return memoria
 
 # AÑADIDO: Parámetro primera_vez
 async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=True):
-    print("\n" + " · "*10)
-    print("           AJUSTES 🔧")
-    print(" · "*10)
+    interfaz_chat("<b>AJUSTES 🔧</b>", emisor="sistema")
     # Texto para pantalla
     menu_pantalla = (
-        "Puedes hacer las siguientes acciones: \n"
-        "1. Cambiar el nombre\n"
-        "2. Borrar tu historial\n"
-        "3. Volver al menú principal\n"
-        "Elige un número válido\n"
+        "Puedes hacer las siguientes acciones: <br>"
+        "1. Cambiar el nombre<br>"
+        "2. Borrar tu historial<br>"
+        "3. Volver al menú principal<br>"
+        "Elige un número válido"
     )
-    print(f"[Asistente]: {menu_pantalla}")
+    interfaz_chat(menu_pantalla, emisor="asistente")
     
     if primera_vez:
-        texto_voz = menu_pantalla
+        texto_voz = menu_pantalla.replace("<br>", "\n")
     else:
         texto_voz = "¿Qué ajuste necesitas? Di 1, 2 o 3."
         
@@ -1164,7 +1211,7 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=
 
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
-    print("Transcribiendo...")
+    interfaz_chat("Transcribiendo...", emisor="sistema")
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
@@ -1172,7 +1219,7 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
     eleccion_texto = resultado["text"].strip().lower()
-    print(f"Has dicho: '{eleccion_texto}'")
+    interfaz_chat(f"{eleccion_texto}", emisor="usuario")
 
     # Convertir respuesta a número de opción (1 al 3)
     prompt_normalizar = f"""
@@ -1198,7 +1245,7 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=
     text_input = tokenizer_texto.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer_texto(text_input, return_tensors="pt").to(model_texto.device)
 
-    print("Interpretando tu elección...")
+    interfaz_chat("Interpretando tu elección...", emisor="sistema")
     with torch.no_grad():
         outputs = model_texto.generate(
             **inputs,
@@ -1207,7 +1254,6 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=
             temperature=None,
             top_p=None,
             top_k=None
-
         )
 
     # Extraer número
@@ -1228,7 +1274,7 @@ async def menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=
     else:
         # Si no detecta ninguna opción válida, avisa y reinicia
         error_msg = "No he logrado entender qué opción quieres. Vamos a intentarlo de nuevo."
-        print(f"⚠️ {error_msg}")
+        interfaz_chat(error_msg, emisor="alerta")
         await generar_voz(error_msg)
         return await menu_ajustes(model_whisper, model_texto, tokenizer_texto, primera_vez=False) # Llamada recursiva
 
@@ -1242,26 +1288,24 @@ import torch
 
 # AÑADIDO: Parámetro "primera_vez" con valor por defecto True
 async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_vez=True):
-    print("\n" + " · "*10)
-    print("        MENÚ PRINCIPAL 🩺")
-    print(" · "*10)
+    interfaz_chat("<b>MENÚ PRINCIPAL 🩺</b>", emisor="sistema")
 
     # Texto COMPLETO para imprimir siempre en la PANTALLA (como ayuda visual)
     menu_pantalla = (
-        "Tienes las siguientes opciones:\n"
-        "1. Registrar medicamentos mediante imágenes\n"
-        "2. Modificar o eliminar un medicamento\n"
-        "3. Ver la tabla resumen de tus tratamientos\n"
-        "4. Hacer preguntas por voz\n"
-        "5. Usar el lector de documentos\n"
-        "6. Ajustes\n"
-        "7. Salir del asistente\n"
+        "Tienes las siguientes opciones:<br>"
+        "1. Registrar medicamentos mediante imágenes<br>"
+        "2. Modificar o eliminar un medicamento<br>"
+        "3. Ver la tabla resumen de tus tratamientos<br>"
+        "4. Hacer preguntas por voz<br>"
+        "5. Usar el lector de documentos<br>"
+        "6. Ajustes<br>"
+        "7. Salir del asistente<br>"
     )
-    print(f"[Asistente]: {menu_pantalla}")
+    interfaz_chat(menu_pantalla, emisor="asistente")
     
     # LA MAGIA: Elegimos qué dice el asistente por VOZ dependiendo de si es la primera vez
     if primera_vez:
-        texto_voz = menu_pantalla + "Di un número de opción válido."
+        texto_voz = menu_pantalla.replace("<br>", "\n") + "Di un número de opción válido."
     else:
         texto_voz = "¿Qué más necesitas hacer? Di un número del 1 al 7."
         
@@ -1269,7 +1313,7 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_
 
     # Escuchar respuesta
     archivo_audio = grabar_audio(segundos=5)
-    print("Transcribiendo...")
+    interfaz_chat("Transcribiendo...", emisor="sistema")
     resultado = model_whisper.transcribe(
             archivo_audio, 
             language="es",
@@ -1277,7 +1321,7 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_
             temperature=0.0 #parametro anti alucinaciones para que no invente palabras y se centre en lo que ha dicho el usuario
         )
     eleccion_texto = resultado["text"].strip().lower()
-    print(f"🗣️ Has dicho: '{eleccion_texto}'")
+    interfaz_chat(f"{eleccion_texto}", emisor="usuario")
 
     # Convertir respuesta a número de opción (1 al 7)
     prompt_normalizar = f"""
@@ -1304,7 +1348,7 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_
     text_input = tokenizer_texto.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer_texto(text_input, return_tensors="pt").to(model_texto.device)
 
-    print("Interpretando tu elección...")
+    interfaz_chat("Interpretando tu elección...", emisor="sistema")
     with torch.no_grad():
         outputs = model_texto.generate(
             **inputs,
@@ -1333,7 +1377,7 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_
     else:
         # Si no detecta ninguna opción válida, avisa y reinicia
         error_msg = "No he logrado entender qué opción quieres. Vamos a intentarlo de nuevo."
-        print(f"⚠️ {error_msg}")
+        interfaz_chat(error_msg, emisor="alerta")
         await generar_voz(error_msg)
         # Si falla y vuelve a intentarlo, le pasamos False para que no le repita todo el menú largo
         return await mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_vez=False) 
@@ -1343,9 +1387,7 @@ async def mostrar_menu_voz(model_whisper, model_texto, tokenizer_texto, primera_
 # 14. BUCLE PRINCIPAL DEL ASISTENTE
 # =====================================================================
 async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_vision, processor_vision):
-    print(" · "*16)
-    print("   🚀 INICIANDO SISTEMA MULTIMODAL DE SALUD...")
-    print(" · "*16)
+    interfaz_chat("<b>🚀 INICIANDO SISTEMA MULTIMODAL DE SALUD...</b>", emisor="sistema")
 
     # 1. Cargar la memoria base desde el archivo JSON
     memoria = cargar_memoria()
@@ -1371,23 +1413,23 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
         # 4. RUTA HACIA LA FASE B (FUNCIONALIDADES)
         # ==========================================
         if opcion == 1:
-            print("\n💊 [Opción 1] - Registrar medicamentos mediante imágenes")
+            interfaz_chat("Opción 1 seleccionada: Registrar medicamentos mediante imágenes", emisor="sistema")
             memoria = await subir_receta(memoria, model_vision, processor_vision)
 
         elif opcion == 2:
-            print("\n✏️ [Opción 2] - Modificar o eliminar medicamentos")
+            interfaz_chat("Opción 2 seleccionada: Modificar o eliminar medicamentos", emisor="sistema")
             memoria = await cambios_meds_menu(memoria, model_whisper, model_texto, tokenizer_texto)
 
         elif opcion == 3:
-            print("\n📋 [Opción 3] - Ver Tabla Resumen de los tratamientos")
+            interfaz_chat("Opción 3 seleccionada: Ver Tabla Resumen de los tratamientos", emisor="sistema")
             resumen_visual(memoria) # Esta función no usa await porque genera HTML directo
 
         elif opcion == 4:
-            print("\n🎙️ [Opción 4] - Preguntas por voz")
+            interfaz_chat("Opción 4 seleccionada: Preguntas por voz", emisor="sistema")
             await preguntas(model_whisper, model_texto, tokenizer_texto)
 
         elif opcion == 5:
-            print("\n📄 [Opción 5] - Lector de documentos")
+            interfaz_chat("Opción 5 seleccionada: Lector de documentos", emisor="sistema")
             await lector_docs(model_vision, processor_vision)
 
         # ==========================================
@@ -1406,6 +1448,6 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
         elif opcion == 7:
             # Despedida y salimos del bucle
             despedida = f"¡Hasta pronto, {memoria['nombre']}! Cuídate mucho y recuerda seguir tus tratamientos."
-            print(f"\n👋 {despedida}")
+            interfaz_chat(despedida, emisor="asistente")
             await generar_voz(despedida)
             break # El break es vital para salir del "while True" y apagar el asistente
