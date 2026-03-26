@@ -210,10 +210,15 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
 # =====================================================================
 # 5. FUNCIONES DE PROCESAMIENTO VISUAL (RECETAS)
 # =====================================================================
+# =====================================================================
+# 5. FUNCIONES DE PROCESAMIENTO VISUAL (RECETAS)
+# =====================================================================
 import torch
 import re
 import json
+import os
 from qwen_vl_utils import process_vision_info
+from pdf2image import convert_from_path # Importante para los PDFs
 
 # Fijamos los números mínimo y máximo de  píxeles para la foto
 MIN_PIXELS = 256 * 28 * 28
@@ -244,23 +249,46 @@ Rules:
 - Keep Spanish text in output
 - STRICTLY FORBIDDEN: Do not include info like legal texts, medical appointment reminders, prices, VAT/IVA, warnings about medicine accumulation, or prescription expiration info.
 - "fin" = treatment end date
+- VERY IMPORTANT: If the dosage ('dosis') or the end date ('fin') are not written in the image (for example, if it is just a pill box), leave those fields EXACTLY as empty strings "".
 
 History (ignore for extraction):
 {memoria.get('medicinas', [])}
 """
 
+    # --- NUEVO: LÓGICA PARA LEER PDFs ---
+    paginas_a_procesar = []
+
+    if ruta_imagen.lower().endswith('.pdf'):
+        interfaz_chat(f"Convirtiendo receta PDF a imágenes: {ruta_imagen}", emisor="sistema")
+        try:
+            imagenes_pdf = convert_from_path(ruta_imagen, dpi=200)
+            for i, imagen in enumerate(imagenes_pdf):
+                temp_img_path = f"temp_receta_page_{i}.png"
+                imagen.save(temp_img_path, "PNG")
+                paginas_a_procesar.append(temp_img_path)
+        except Exception as e:
+            interfaz_chat(f"Error al convertir el PDF: {e}", emisor="alerta")
+            return None
+    else:
+        # si ya es una imagen no hace falta preprocesado
+        paginas_a_procesar.append(ruta_imagen)
+
+    # Construimos el array de contenido dinámicamente con todas las imágenes que haya
+    contenido_usuario = []
+    for img_path in paginas_a_procesar:
+        contenido_usuario.append({"type": "image", "image": img_path})
+    
+    contenido_usuario.append({"type": "text", "text": prompt})
+
     mensajes = [
         {
             "role": "user",
-            "content": [
-                {"type": "image", "image": ruta_imagen},
-                {"type": "text", "text": prompt},
-            ],
+            "content": contenido_usuario,
         }
     ]
 
     try:
-        interfaz_chat("El modelo de visión está leyendo la imagen...", emisor="sistema")
+        interfaz_chat("El modelo de visión está leyendo el documento...", emisor="sistema")
 
         text = processor_vision.apply_chat_template(mensajes, tokenize=False, add_generation_prompt=True)
         image_inputs, video_inputs = process_vision_info(mensajes)
@@ -290,6 +318,11 @@ History (ignore for extraction):
             generated_ids_trimmed,
             skip_special_tokens=True
         )[0].strip()
+
+        # --- LIMPIEZA DE IMÁGENES TEMPORALES ---
+        for img_path in paginas_a_procesar:
+            if "temp_receta_page_" in img_path and os.path.exists(img_path):
+                os.remove(img_path)
 
         # Extraer JSON
         match = re.search(r'\{.*\}', texto_respuesta, re.DOTALL)
@@ -349,10 +382,13 @@ def registrar_en_memoria(nuevos_datos):
 # =====================================================================
 # 7. OPCIÓN 1: AÑADIR RECETAS
 # =====================================================================
+# =====================================================================
+# 7. OPCIÓN 1: AÑADIR RECETAS
+# =====================================================================
 from google.colab import files
 
-async def subir_receta(memoria, model_vision, processor_vision):
-    texto_peticion = "Por favor, sube la foto de tu receta o medicina."
+async def subir_receta(memoria, model_vision, processor_vision, model_whisper, model_texto, tokenizer_texto):
+    texto_peticion = "Por favor, sube la foto o el PDF de tu receta o medicina."
     interfaz_chat(texto_peticion, emisor="asistente")
     await generar_voz(texto_peticion)
 
@@ -363,10 +399,72 @@ async def subir_receta(memoria, model_vision, processor_vision):
     if subido:
         nombre_archivo = list(subido.keys())[0]
 
-        interfaz_chat("Analizando imagen...", emisor="sistema")
+        interfaz_chat("Analizando documento...", emisor="sistema")
         datos_extraidos = analizar_receta(nombre_archivo, memoria, model_vision, processor_vision)
 
         if datos_extraidos:
+            lista_medicinas = datos_extraidos[0]
+            
+            # --- LÓGICA: COMPROBAR CAJAS VS RECETAS ---
+            for med in lista_medicinas:
+                dosis_actual = med.get("dosis", "").strip()
+                fin_actual = med.get("fin", "").strip()
+                
+                # Si falta la dosis o el fin, asumimos que es una caja sin instrucciones
+                if not dosis_actual or not fin_actual or dosis_actual.lower() in ["no", "none", "null", "falta", "no especificada", "no especificado"]:
+                    nombre_med = med.get("nombre", "este medicamento")
+                    aviso_caja = f"He detectado {nombre_med}, pero parece que es solo la caja y no veo las instrucciones médicas. ¿Qué cantidad, cada cuánto tiempo y hasta qué fecha debes tomarlo?"
+                    interfaz_chat(aviso_caja, emisor="asistente")
+                    await generar_voz(aviso_caja)
+                    
+                    # Grabar la respuesta
+                    archivo_audio = grabar_audio(segundos=10)
+                    resultado_audio = model_whisper.transcribe(
+                        archivo_audio, 
+                        language="es",
+                        no_speech_threshold=0.3,
+                        condition_on_previous_text=False,
+                        temperature=0.0
+                    )
+                    respuesta_instrucciones = resultado_audio["text"].strip()
+                    interfaz_chat(f"{respuesta_instrucciones}", emisor="usuario")
+                    
+                    interfaz_chat("Procesando tus instrucciones...", emisor="sistema")
+                    
+                    # Usar Qwen Texto para extraer los datos estructurados del audio
+                    prompt_extraccion = f"""
+                    El usuario ha dado estas instrucciones de toma para su medicamento: "{respuesta_instrucciones}"
+                    Extrae la dosis (cantidad y frecuencia) y la fecha de fin.
+                    Responde SOLO en formato JSON válido con las claves "dosis" y "fin".
+                    Si la fecha de fin no está clara, pon "No especificado".
+                    """
+                    mensajes_inst = [
+                        {"role": "system", "content": "Eres un asistente que extrae datos a JSON. Devuelve estrictamente JSON sin formato Markdown adicional."},
+                        {"role": "user", "content": prompt_extraccion}
+                    ]
+                    texto_prompt = tokenizer_texto.apply_chat_template(mensajes_inst, tokenize=False, add_generation_prompt=True)
+                    inputs_inst = tokenizer_texto([texto_prompt], return_tensors="pt").to("cuda")
+                    
+                    with torch.no_grad():
+                        outputs_inst = model_texto.generate(**inputs_inst, max_new_tokens=50, temperature=0.1)
+                        
+                    respuesta_inst = tokenizer_texto.decode(outputs_inst[0][inputs_inst.input_ids.shape[1]:], skip_special_tokens=True).strip()
+                    
+                    # Limpiar el JSON
+                    match_json = re.search(r'\{.*\}', respuesta_inst, re.DOTALL)
+                    if match_json:
+                        try:
+                            datos_inst = json.loads(match_json.group(0))
+                            med["dosis"] = datos_inst.get("dosis", respuesta_instrucciones)
+                            med["fin"] = datos_inst.get("fin", "No especificado")
+                        except:
+                            med["dosis"] = respuesta_instrucciones
+                            med["fin"] = "No especificado"
+                    else:
+                        med["dosis"] = respuesta_instrucciones
+                        med["fin"] = "No especificado"
+            # --- FIN LÓGICA CAJAS ---
+
             # Guardamos en la memoria JSON
             memoria_actualizada = registrar_en_memoria(datos_extraidos)
 
@@ -396,12 +494,10 @@ async def subir_receta(memoria, model_vision, processor_vision):
             return memoria_actualizada
 
         else:
-            confirmacion = "He leído la información que me has proporcionado, y ya estaba introducida en el registro. Aquí tienes el registro y puedes comprobar que está todo en orden:"
-            interfaz_chat(confirmacion, emisor="asistente")
-            await generar_voz(confirmacion)
-
-            # Mostramos cómo queda la lista visualmente
-            mostrar_recordatorios(memoria)
+            # --- AQUÍ ESTÁ LA CORRECCIÓN DEL ERROR ---
+            error_lectura = "Lo siento, no he podido leer correctamente el documento o no he encontrado ninguna receta en él."
+            interfaz_chat(error_lectura, emisor="alerta")
+            await generar_voz(error_lectura)
 
             # Borramos el archivo tras procesarlo
             if os.path.exists(nombre_archivo):
@@ -410,7 +506,7 @@ async def subir_receta(memoria, model_vision, processor_vision):
 
             return memoria
 
-    await generar_voz("No se ha subido ninguna imagen.")
+    await generar_voz("No se ha subido ningún documento.")
     return memoria
 
 def mostrar_recordatorios(memoria):
@@ -419,6 +515,7 @@ def mostrar_recordatorios(memoria):
         fin = m.get('fin', '')
         texto += f"💊 {m['nombre']} - {m['dosis']} - Fecha Fin: {fin}<br>"
     interfaz_chat(texto, emisor="sistema")
+
 
 
 # =====================================================================
@@ -1158,8 +1255,9 @@ async def cambiar_nombre(memoria, model_whisper, model_texto, tokenizer_texto):
     guardar_memoria(memoria)
 
     texto_confirmacion = f"¡Perfecto, {memoria['nombre']}! Ya he cambiado tu nombre. 🤗"
+    texto_confirmacion_sin_emoji = f"¡Perfecto, {memoria['nombre']}! Ya he cambiado tu nombre. "
     interfaz_chat(texto_confirmacion, emisor="asistente")
-    await generar_voz(texto_confirmacion)
+    await generar_voz(texto_confirmacion_sin_emoji)
 
     # RETORNAMOS LA MEMORIA ACTUALIZADA
     return memoria
@@ -1427,7 +1525,8 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
         # ==========================================
         if opcion == 1:
             interfaz_chat("Opción 1 seleccionada: Registrar medicamentos mediante imágenes", emisor="sistema")
-            memoria = await subir_receta(memoria, model_vision, processor_vision)
+            # MUY IMPORTANTE: Se han añadido los modelos de texto y audio a la función subir_receta
+            memoria = await subir_receta(memoria, model_vision, processor_vision, model_whisper, model_texto, tokenizer_texto)
 
         elif opcion == 2:
             interfaz_chat("Opción 2 seleccionada: Modificar o eliminar medicamentos", emisor="sistema")
