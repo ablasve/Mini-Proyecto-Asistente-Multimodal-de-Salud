@@ -103,6 +103,7 @@ var record = time => new Promise(async resolve => {
   recorder.onstop = async ()=>{
     const blob = new Blob(chunks)
     const text = await b2text(blob)
+    stream.getTracks().forEach(track => track.stop())
     resolve(text)
   }
   recorder.stop()
@@ -174,7 +175,7 @@ async def presentacion(memoria, model_whisper, model_texto, tokenizer_texto):
 
         # Preparamos el prompt estricto para extraer solo el nombre
         mensajes = [
-            {"role": "system", "content": "Eres un asistente experto en extracción de entidades. Tu única tarea es leer una frase y devolver ÚNICAMENTE el nombre propio de la persona que se presenta. No añadas puntos, ni saludos, ni explicaciones. Solo la palabra del nombre."},
+            {"role": "system", "content": "Eres un asistente experto en extracción de entidades. Tu única tarea es leer una frase y devolver ÚNICAMENTE el nombre propio de la persona que se presenta. No añadas puntos, ni saludos, ni explicaciones. Solo la palabra del nombre. Si no detectas ningún nombre, deja el campo vacío como estaba, con \"None\"."},
             {"role": "user", "content": f"Extrae el nombre de esta frase: '{texto_bruto}'"}
         ]
 
@@ -908,6 +909,7 @@ async def modificar_med(memoria, model_whisper, model_texto, tokenizer_texto, pr
 # 9. OPCIÓN 3: TABLA DE HORARIOS (HTML)
 # =====================================================================
 from IPython.display import display, HTML
+import time
 
 def resumen_visual(datos_medicinas):
     interfaz_chat("Organizando horarios con lógica exacta...", emisor="sistema")
@@ -978,6 +980,8 @@ def resumen_visual(datos_medicinas):
     </div>
     """
     display(HTML(html))
+    #poner un sleep para que de tiempo a que se renderice antes de generar la voz
+    time.sleep(10)
 
 
 # =====================================================================
@@ -1028,7 +1032,7 @@ async def preguntas(model_whisper, model_texto, tokenizer_texto):
     #construimos el prompt
     prompt = f"""
     You are a personal health assistant—direct and very respectful—designed for older adults.
-    All in Spanish.
+    Always answer all in Spanish.
     The user has just asked you the following question by voice: “{pregunta_usuario}”
 
     RULES FOR YOUR RESPONSE:
@@ -1528,6 +1532,9 @@ async def iniciar_asistente(model_whisper, model_texto, tokenizer_texto, model_v
 
         elif opcion == 3:
             interfaz_chat("Opción 3 seleccionada: Ver Tabla Resumen de los tratamientos", emisor="sistema")
+            #decir en voz que ahi tiene su resumen visual de sus tratamientos
+            await asyncio.sleep(3)  # Esperar a que se renderice el resumen
+            await generar_voz("Aquí tienes tu resumen visual de los tratamientos.")
             resumen_visual(memoria) # Esta función no usa await porque genera HTML directo
 
         elif opcion == 4:
